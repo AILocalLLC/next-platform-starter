@@ -8,7 +8,7 @@ export default async function CallDetailPage({ params }) {
     const { supabase, subaccount } = await requireSubaccount(id);
     const { data: call } = await supabase
         .from('calls')
-        .select('id, started_at, from_number, status, summary, transcript, lead_captured, duration_seconds, contacts(id, name, phone, email, notes)')
+        .select('id, channel, started_at, from_number, status, summary, transcript, lead_captured, duration_seconds, contacts(id, name, phone, email, notes)')
         .eq('id', callId)
         .eq('subaccount_id', id)
         .maybeSingle();
@@ -26,7 +26,7 @@ export default async function CallDetailPage({ params }) {
                         {(call.transcript || []).map((t, i) => (
                             <li key={i} className={`flex ${t.role === 'ai' ? 'justify-start' : 'justify-end'}`}>
                                 <div className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${t.role === 'ai' ? 'bg-slate-100 text-slate-800' : 'text-white'}`} style={t.role === 'ai' ? undefined : { background: 'var(--brand)' }}>
-                                    <p className="mb-0.5 text-xs opacity-70">{t.role === 'ai' ? 'AI receptionist' : 'Caller'}</p>
+                                    <p className="mb-0.5 text-xs opacity-70">{t.role === 'ai' ? 'AI receptionist' : call.channel === 'web' ? 'Visitor' : 'Caller'}</p>
                                     {t.text}
                                 </div>
                             </li>
@@ -41,7 +41,7 @@ export default async function CallDetailPage({ params }) {
                         <span className="text-slate-500">When:</span> {formatDateTime(call.started_at, subaccount.timezone)}
                     </p>
                     <p>
-                        <span className="text-slate-500">Caller:</span> {formatPhone(call.from_number)}
+                        <span className="text-slate-500">From:</span> {call.channel === 'web' ? 'Website chat' : formatPhone(call.from_number)}
                     </p>
                     <p>
                         <span className="text-slate-500">Status:</span> {call.status}

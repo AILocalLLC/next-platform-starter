@@ -1,6 +1,7 @@
 import { updateSubaccount } from 'app/(app)/actions';
 import { ActionForm } from 'components/app/action-form';
 import { requireSubaccount } from 'lib/auth';
+import { brand } from 'lib/brand';
 
 const PLACEHOLDER = `Services: gutter installation, gutter guards, repairs, cleaning
 Service area: Tulsa, Broken Arrow, Owasso, Jenks
@@ -11,10 +12,13 @@ Common questions: ...`;
 export default async function ReceptionistPage({ params }) {
     const { id } = await params;
     const { subaccount: s } = await requireSubaccount(id);
+    const base = (process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '');
+    const snippet = `<script src="${base}/widget.js" data-account="${s.id}" data-color="${brand.color}" async></script>`;
 
     return (
-        <div className="max-w-3xl">
+        <div className="max-w-3xl space-y-6">
             <div className="card">
+                <h2 className="mb-4 font-semibold">Phone receptionist</h2>
                 <ActionForm action={updateSubaccount.bind(null, id)}>
                     <input type="hidden" name="receptionist_form" value="1" />
                     <label className="flex items-center gap-2 text-sm font-medium">
@@ -65,6 +69,28 @@ export default async function ReceptionistPage({ params }) {
                         </div>
                     </div>
                 </ActionForm>
+            </div>
+
+            <div className="card">
+                <h2 className="mb-1 font-semibold">Website chat</h2>
+                <p className="mb-4 text-sm text-slate-500">The same AI, as a chat bubble on the business’s website. It uses the business information above and saves leads to Contacts.</p>
+                <ActionForm action={updateSubaccount.bind(null, id)}>
+                    <input type="hidden" name="chat_form" value="1" />
+                    <label className="flex items-center gap-2 text-sm font-medium">
+                        <input type="checkbox" name="chat_enabled" defaultChecked={s.chat_enabled} className="h-4 w-4" />
+                        Website chat is on
+                    </label>
+                    <div>
+                        <label className="label" htmlFor="chat_greeting">
+                            Chat greeting
+                        </label>
+                        <input id="chat_greeting" name="chat_greeting" defaultValue={s.chat_greeting} className="field" />
+                    </div>
+                </ActionForm>
+                <div className="mt-5">
+                    <p className="label">Paste before &lt;/body&gt; on the website</p>
+                    <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded-md bg-slate-900 p-3 text-xs text-slate-100">{snippet}</pre>
+                </div>
             </div>
         </div>
     );

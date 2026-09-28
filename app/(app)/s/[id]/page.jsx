@@ -5,7 +5,7 @@ import { Stat } from 'components/app/stat';
 import { requireSubaccount } from 'lib/auth';
 import { dailyCounts, sinceIso, summarize } from 'lib/stats';
 
-const CALL_COLUMNS = 'id, started_at, ended_at, from_number, summary, lead_captured, duration_seconds';
+const CALL_COLUMNS = 'id, channel, started_at, ended_at, from_number, summary, lead_captured, duration_seconds';
 
 export default async function SubaccountOverview({ params }) {
     const { id } = await params;

@@ -8,7 +8,7 @@ export function CallsTable({ calls, subaccountId, timeZone }) {
                 <thead>
                     <tr>
                         <th>When</th>
-                        <th>Caller</th>
+                        <th>From</th>
                         <th>Summary</th>
                         <th>Lead</th>
                         <th className="text-right">Length</th>
@@ -22,7 +22,7 @@ export function CallsTable({ calls, subaccountId, timeZone }) {
                                     {formatDateTime(c.started_at, timeZone)}
                                 </Link>
                             </td>
-                            <td className="whitespace-nowrap tabular-nums">{formatPhone(c.from_number)}</td>
+                            <td className="whitespace-nowrap tabular-nums">{c.channel === 'web' ? <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">Web chat</span> : formatPhone(c.from_number)}</td>
                             <td className="max-w-md truncate text-slate-600">{c.summary || (c.ended_at ? '—' : 'In progress')}</td>
                             <td>{c.lead_captured ? <span className="rounded bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">Lead</span> : ''}</td>
                             <td className="text-right tabular-nums">{c.duration_seconds != null ? `${Math.floor(c.duration_seconds / 60)}:${String(c.duration_seconds % 60).padStart(2, '0')}` : '—'}</td>

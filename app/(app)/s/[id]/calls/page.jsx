@@ -11,7 +11,7 @@ export default async function CallsPage({ params, searchParams }) {
     const { supabase, subaccount } = await requireSubaccount(id);
     let query = supabase
         .from('calls')
-        .select('id, started_at, ended_at, from_number, summary, lead_captured, duration_seconds')
+        .select('id, channel, started_at, ended_at, from_number, summary, lead_captured, duration_seconds')
         .eq('subaccount_id', id)
         .order('started_at', { ascending: false })
         .range((page - 1) * PAGE, page * PAGE);

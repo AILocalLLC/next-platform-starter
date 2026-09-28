@@ -1,5 +1,6 @@
 import twilio from 'twilio';
 import { callStartMessage, runTurn } from 'lib/receptionist';
+import { upsertLead } from 'lib/leads';
 import { createAdminClient } from 'lib/supabase/admin';
 import { forbidden, gather, readTwilioRequest, twimlResponse, VOICE } from 'lib/voice';
 
@@ -41,19 +42,7 @@ export async function POST(request) {
 
     let contactId = call.contact_id;
     const onSaveLead = async (lead) => {
-        const row = {
-            subaccount_id: subaccount.id,
-            name: lead.name,
-            phone: lead.phone || call.from_number,
-            email: lead.email || null,
-            source: 'ai_receptionist',
-            notes: [lead.reason, lead.callback_time && `Preferred time: ${lead.callback_time}`].filter(Boolean).join('\n')
-        };
-        const res = contactId
-            ? await db.from('contacts').update(row).eq('id', contactId).select('id').single()
-            : await db.from('contacts').insert(row).select('id').single();
-        if (res.error) throw new Error(res.error.message);
-        contactId = res.data.id;
+        contactId = await upsertLead(db, { subaccountId: subaccount.id, contactId, lead, fallbackPhone: call.from_number, source: 'ai_receptionist' });
     };
 
     let result;

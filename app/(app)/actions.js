@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import twilio from 'twilio';
 import { requireAdmin, requireSubaccount, requireUser } from 'lib/auth';
 import { createAdminClient } from 'lib/supabase/admin';
+import { csvToContacts } from 'lib/csv';
 import { toE164 } from 'lib/phone';
 
 const str = (fd, k) => String(fd.get(k) ?? '').trim();
@@ -57,6 +58,10 @@ export async function updateSubaccount(id, prev, fd) {
         if (fd.has(k)) patch[k] = toE164(opt(fd, k));
     }
     if (fd.has('receptionist_form')) patch.receptionist_enabled = fd.get('receptionist_enabled') === 'on';
+    if (fd.has('chat_form')) {
+        patch.chat_enabled = fd.get('chat_enabled') === 'on';
+        patch.chat_greeting = str(fd, 'chat_greeting') || 'Hi! How can I help you today?';
+    }
     if (patch.name === '') return { error: 'Name is required.' };
     const { error } = await supabase.from('subaccounts').update(patch).eq('id', id);
     if (error) return { error: error.message };
@@ -121,6 +126,42 @@ export async function addContact(subaccountId, prev, fd) {
     if (error) return { error: error.message };
     revalidatePath(`/s/${subaccountId}/contacts`);
     return { message: 'Contact added.' };
+}
+
+// Import a CSV (e.g. Go High Level export). Skips rows whose phone or email already exists.
+export async function importContacts(subaccountId, prev, fd) {
+    const { supabase } = await requireSubaccount(subaccountId);
+    const file = fd.get('file');
+    if (!file || typeof file === 'string' || !file.size) return { error: 'Choose a CSV file.' };
+    if (file.size > 10 * 1024 * 1024) return { error: 'File is larger than 10 MB.' };
+    const rows = csvToContacts(await file.text());
+    if (!rows.length) return { error: 'No contacts found. The file needs a header row with Name/First Name, Phone, or Email.' };
+
+    const phones = new Set();
+    const emails = new Set();
+    for (let from = 0; ; from += 1000) {
+        const { data, error } = await supabase.from('contacts').select('phone, email').eq('subaccount_id', subaccountId).range(from, from + 999);
+        if (error) return { error: error.message };
+        data.forEach((c) => {
+            if (c.phone) phones.add(c.phone);
+            if (c.email) emails.add(c.email.toLowerCase());
+        });
+        if (data.length < 1000) break;
+    }
+
+    const fresh = [];
+    for (const c of rows) {
+        if ((c.phone && phones.has(c.phone)) || (c.email && emails.has(c.email))) continue;
+        if (c.phone) phones.add(c.phone);
+        if (c.email) emails.add(c.email);
+        fresh.push({ ...c, subaccount_id: subaccountId, source: 'import' });
+    }
+    for (let i = 0; i < fresh.length; i += 500) {
+        const { error } = await supabase.from('contacts').insert(fresh.slice(i, i + 500));
+        if (error) return { error: `Imported ${i} before an error: ${error.message}` };
+    }
+    revalidatePath(`/s/${subaccountId}/contacts`);
+    return { message: `Imported ${fresh.length} contacts${rows.length > fresh.length ? `, skipped ${rows.length - fresh.length} duplicates` : ''}.` };
 }
 
 // ---- Team ----
