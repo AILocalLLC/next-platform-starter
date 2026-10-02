@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import Anthropic from '@anthropic-ai/sdk';
 import { buildSystemPrompt, buildTools, runTurn } from '../lib/receptionist.js';
 import { dailyCounts, summarize, formatPhone } from '../lib/stats.js';
 import { toE164 } from '../lib/phone.js';
@@ -28,9 +29,9 @@ test('plain reply continues the call', async () => {
     assert.equal(r.reply, 'Sure, what is your name?');
     assert.equal(r.messages.length, 2);
     const req = client.calls[0];
-    assert.equal(req.model, 'claude-opus-5');
-    assert.equal(req.fallbacks, 'default');
-    assert.deepEqual(req.betas, ['server-side-fallback-2026-07-01']);
+    assert.equal(req.model, 'claude-sonnet-5'); // phone: low-latency model
+    assert.equal('fallbacks' in req, false);
+    assert.equal('betas' in req, false);
 });
 
 test('save_lead runs the tool and loops for the spoken reply', async () => {
@@ -94,4 +95,30 @@ test('stats helpers', () => {
     assert.equal(formatPhone('+19185551234'), '(918) 555-1234');
     assert.equal(toE164('(918) 555-1234'), '+19185551234');
     assert.equal(toE164('1-918-555-1234'), '+19185551234');
+});
+
+test('website chat keeps Opus with refusal fallback', async () => {
+    const client = fakeClient([{ stop_reason: 'end_turn', content: [{ type: 'text', text: 'Hi!' }] }]);
+    await runTurn({ subaccount: sub, messages: [], callerText: 'hi', onSaveLead: async () => {}, channel: 'web', client });
+    assert.equal(client.calls[0].model, 'claude-opus-5');
+    assert.equal(client.calls[0].fallbacks, 'default');
+    assert.deepEqual(client.calls[0].betas, ['server-side-fallback-2026-07-01']);
+});
+
+test('phone call retries on the main model if the fast model rejects the request', async () => {
+    const calls = [];
+    const client = {
+        beta: {
+            messages: {
+                create: async (req) => {
+                    calls.push(req.model);
+                    if (req.model === 'claude-sonnet-5') throw new Anthropic.BadRequestError(400, { error: { message: 'bad' } }, 'bad', new Headers());
+                    return { stop_reason: 'end_turn', content: [{ type: 'text', text: 'Hello!' }] };
+                }
+            }
+        }
+    };
+    const r = await runTurn({ subaccount: sub, messages: [], callerText: 'hi', onSaveLead: async () => {}, client });
+    assert.deepEqual(calls, ['claude-sonnet-5', 'claude-opus-5']);
+    assert.equal(r.reply, 'Hello!');
 });
