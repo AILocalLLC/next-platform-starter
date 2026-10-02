@@ -90,3 +90,13 @@ test('receptionist offers and books via calendar tools', async () => {
     assert.equal(booked[0].start, 'S1');
     assert.equal(r.reply, "You're booked.");
 });
+
+test('private key accepted with or without header lines and escaped newlines', async () => {
+    const { createPrivateKey, generateKeyPairSync: gen } = await import('node:crypto');
+    const { normalizePrivateKey } = await import('../lib/gcal.js');
+    const pem = gen('rsa', { modulusLength: 2048 }).privateKey.export({ type: 'pkcs8', format: 'pem' });
+    const body = pem.split('\n').filter((l) => l && !l.includes('PRIVATE KEY')).join('');
+    for (const variant of [pem, pem.replace(/\n/g, '\\n'), `"${pem.replace(/\n/g, '\\n')}"`, body, body.match(/.{1,64}/g).join('\\n')]) {
+        assert.doesNotThrow(() => createPrivateKey(normalizePrivateKey(variant)));
+    }
+});
