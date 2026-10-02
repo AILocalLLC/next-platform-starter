@@ -28,6 +28,13 @@ export default async function CallDetailPage({ params }) {
                                 <div className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${t.role === 'ai' ? 'bg-slate-100 text-slate-800' : 'text-white'}`} style={t.role === 'ai' ? undefined : { background: 'var(--brand)' }}>
                                     <p className="mb-0.5 text-xs opacity-70">{t.role === 'ai' ? 'AI receptionist' : call.channel === 'web' ? 'Visitor' : 'Caller'}</p>
                                     {t.text}
+                                    {t.timing && (
+                                        <p className="mt-1 text-xs opacity-60">
+                                            Replied in {(t.timing.total / 1000).toFixed(1)}s (AI {((t.timing.ai || 0) / 1000).toFixed(1)}s
+                                            {t.timing.tools ? `, tools ${(t.timing.tools / 1000).toFixed(1)}s` : ''}
+                                            {t.timing.rounds > 1 ? `, ${t.timing.rounds} AI steps` : ''})
+                                        </p>
+                                    )}
                                 </div>
                             </li>
                         ))}

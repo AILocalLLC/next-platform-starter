@@ -12,6 +12,7 @@ const FALLBACK = "Sorry, I'm having trouble right now. Someone from the team wil
 export async function POST(request) {
     const params = await readTwilioRequest(request);
     if (!params) return forbidden();
+    const t0 = Date.now();
 
     const search = new URL(request.url).searchParams;
     const callId = search.get('call');
@@ -22,6 +23,7 @@ export async function POST(request) {
     const { data: call } = await db.from('calls').select('*, subaccounts(*)').eq('id', callId).maybeSingle();
     if (!call || call.twilio_call_sid !== params.CallSid) return forbidden();
     const subaccount = call.subaccounts;
+    const loadMs = Date.now() - t0;
 
     const speech = (params.SpeechResult || '').trim();
     if (!speech) {
@@ -56,7 +58,9 @@ export async function POST(request) {
     }
 
     const reply = result.reply || (result.action === 'continue' ? 'Sorry, could you say that again?' : 'Goodbye!');
-    transcript.push({ role: 'ai', text: reply, at: new Date().toISOString() });
+    const timing = { ...result.timing, load: loadMs, total: Date.now() - t0 };
+    console.log('voice turn timing', call.id, JSON.stringify(timing));
+    transcript.push({ role: 'ai', text: reply, at: new Date().toISOString(), timing });
     await db
         .from('calls')
         .update({ messages: result.messages, transcript, contact_id: state.contactId, lead_captured: Boolean(state.contactId) })
