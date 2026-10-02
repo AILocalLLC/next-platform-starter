@@ -24,6 +24,14 @@ See `.env.example`. Required: Supabase URL/keys, `ANTHROPIC_API_KEY`, Twilio SID
 - **Contacts → Import from CSV**: bring over Go High Level contacts (Contacts → Export in GHL). Duplicates are skipped.
 - **AI receptionist → Website chat**: turn it on and paste the snippet into the client's website. Same AI, same business info; leads land in Contacts and the owner gets a text.
 
+## Calendar booking (Google Calendar)
+1. Google Cloud console → create a project → enable **Google Calendar API**.
+2. IAM & Admin → Service accounts → create one → Keys → Add key → JSON. From the file, copy `client_email` into `GOOGLE_CLIENT_EMAIL` and `private_key` into `GOOGLE_PRIVATE_KEY` (Netlify env vars), then redeploy.
+3. Run `supabase/migrations/0003_calendar_booking.sql` in the Supabase SQL editor.
+4. In Google Calendar → the calendar's **Settings and sharing** → share with the service account email, permission **Make changes to events**.
+5. In the app: subaccount → **AI receptionist → Calendar booking** → paste the calendar ID (your Gmail address for the main calendar), set days/hours/length → Save.
+The AI then offers open times, books them on the calendar, and texts the caller the booked time. Existing events block those times.
+
 ## Switching from Go High Level (no downtime)
 1. Build and test everything with one test Twilio number. GHL stays live.
 2. Import each client's contacts via CSV.

@@ -54,4 +54,5 @@ test('caller confirmation text', () => {
         'Thanks John! New Gutters Near Me got your request. A team member will reach out within a few hours to confirm. Reply STOP to opt out.'
     );
     assert.match(confirmationText({ name: 'X' }, { name: '' }), /^Thanks! X got/);
+    assert.equal(confirmationText({ name: 'NGNM' }, { name: 'Ann' }, 'Monday, October 5 at 11:00 AM'), 'Thanks Ann! Your NGNM appointment is booked for Monday, October 5 at 11:00 AM. Reply STOP to opt out.');
 });

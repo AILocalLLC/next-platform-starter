@@ -1,5 +1,6 @@
 import twilio from 'twilio';
 import { callStartMessage, runTurn } from 'lib/receptionist';
+import { bookingContext } from 'lib/booking';
 import { upsertLead } from 'lib/leads';
 import { createAdminClient } from 'lib/supabase/admin';
 import { forbidden, gather, readTwilioRequest, twimlResponse, VOICE } from 'lib/voice';
@@ -40,14 +41,15 @@ export async function POST(request) {
         : `${callStartMessage({ from: call.from_number, startedAt: call.started_at, timezone: subaccount.timezone })}\n` +
           `You already greeted the caller with: "${subaccount.greeting}"\nCaller: ${speech}`;
 
-    let contactId = call.contact_id;
+    const state = { contactId: call.contact_id };
     const onSaveLead = async (lead) => {
-        contactId = await upsertLead(db, { subaccountId: subaccount.id, contactId, lead, fallbackPhone: call.from_number, source: 'ai_receptionist' });
+        state.contactId = await upsertLead(db, { subaccountId: subaccount.id, contactId: state.contactId, lead, fallbackPhone: call.from_number, source: 'ai_receptionist' });
     };
+    const booking = bookingContext({ db, subaccount, callId: call.id, fallbackPhone: call.from_number, source: 'ai_receptionist', state });
 
     let result;
     try {
-        result = await runTurn({ subaccount, messages: call.messages, callerText, onSaveLead });
+        result = await runTurn({ ...booking, messages: call.messages, callerText, onSaveLead });
     } catch (err) {
         console.error('receptionist turn failed', err);
         result = { messages: call.messages, reply: FALLBACK, action: 'hangup' };
@@ -57,7 +59,7 @@ export async function POST(request) {
     transcript.push({ role: 'ai', text: reply, at: new Date().toISOString() });
     await db
         .from('calls')
-        .update({ messages: result.messages, transcript, contact_id: contactId, lead_captured: Boolean(contactId) })
+        .update({ messages: result.messages, transcript, contact_id: state.contactId, lead_captured: Boolean(state.contactId) })
         .eq('id', call.id);
 
     if (result.action === 'hangup') {

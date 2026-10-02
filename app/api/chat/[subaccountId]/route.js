@@ -1,5 +1,6 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { runTurn } from 'lib/receptionist';
+import { bookingContext } from 'lib/booking';
 import { upsertLead } from 'lib/leads';
 import { createAdminClient } from 'lib/supabase/admin';
 import { finalizeCall } from 'lib/voice';
@@ -84,17 +85,18 @@ export async function POST(request, { params }) {
     const transcript = [...chat.transcript, { role: 'caller', text: message, at: new Date().toISOString() }];
     const callerText = chat.messages.length
         ? message
-        : `[Website chat started. Page: ${String(body.page || 'unknown').slice(0, 200)}]\nYou already greeted the visitor with: "${sub.chat_greeting}"\nVisitor: ${message}`;
+        : `[Website chat started ${new Date().toLocaleString('en-US', { timeZone: sub.timezone || 'America/New_York' })}. Page: ${String(body.page || 'unknown').slice(0, 200)}]\nYou already greeted the visitor with: "${sub.chat_greeting}"\nVisitor: ${message}`;
 
-    let contactId = chat.contact_id;
+    const state = { contactId: chat.contact_id };
     const onSaveLead = async (lead) => {
         if (!lead.phone && !lead.email) throw new Error('Ask for a phone number or email first.');
-        contactId = await upsertLead(db, { subaccountId: sub.id, contactId, lead, source: 'website_chat' });
+        state.contactId = await upsertLead(db, { subaccountId: sub.id, contactId: state.contactId, lead, source: 'website_chat' });
     };
+    const booking = bookingContext({ db, subaccount: sub, callId: chat.id, fallbackPhone: null, source: 'website_chat', state });
 
     let result;
     try {
-        result = await runTurn({ subaccount: sub, messages: chat.messages, callerText, onSaveLead, channel: 'web' });
+        result = await runTurn({ ...booking, messages: chat.messages, callerText, onSaveLead, channel: 'web' });
     } catch (err) {
         console.error('chat turn failed', err);
         return json({ error: 'Sorry, something went wrong. Please try again.' }, 502);
@@ -102,6 +104,7 @@ export async function POST(request, { params }) {
 
     const reply = result.reply || 'Sorry, could you say that again?';
     transcript.push({ role: 'ai', text: reply, at: new Date().toISOString() });
+    const contactId = state.contactId;
     const firstLead = contactId && !chat.lead_captured;
     await db
         .from('calls')

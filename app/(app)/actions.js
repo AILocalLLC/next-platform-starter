@@ -62,6 +62,16 @@ export async function updateSubaccount(id, prev, fd) {
         patch.chat_enabled = fd.get('chat_enabled') === 'on';
         patch.chat_greeting = str(fd, 'chat_greeting') || 'Hi! How can I help you today?';
     }
+    if (fd.has('calendar_form')) {
+        patch.calendar_id = opt(fd, 'calendar_id');
+        patch.appointment_minutes = Math.min(480, Math.max(15, Number(str(fd, 'appointment_minutes')) || 60));
+        patch.booking_days = fd.getAll('booking_days').map(String).filter((d) => /^[0-6]$/.test(d)).join(',');
+        const hm = (k, def) => (/^\d{2}:\d{2}$/.test(str(fd, k)) ? str(fd, k) : def);
+        patch.booking_start = hm('booking_start', '09:00');
+        patch.booking_end = hm('booking_end', '17:00');
+        patch.booking_notice_hours = Math.min(336, Math.max(0, Number(str(fd, 'booking_notice_hours')) || 0));
+        if (patch.booking_start >= patch.booking_end) return { error: 'Start time must be before end time.' };
+    }
     if (patch.name === '') return { error: 'Name is required.' };
     const { error } = await supabase.from('subaccounts').update(patch).eq('id', id);
     if (error) return { error: error.message };
