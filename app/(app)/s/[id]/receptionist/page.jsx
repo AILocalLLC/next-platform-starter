@@ -1,4 +1,5 @@
-import { updateSubaccount } from 'app/(app)/actions';
+import { testCalendar, updateSubaccount } from 'app/(app)/actions';
+import { TestCalendar } from 'components/app/test-calendar';
 import { ActionForm } from 'components/app/action-form';
 import { requireSubaccount } from 'lib/auth';
 import { brand } from 'lib/brand';
@@ -135,6 +136,7 @@ export default async function ReceptionistPage({ params }) {
                     </div>
                     <p className="text-xs text-slate-500">Times use this subaccount’s time zone ({s.timezone}). Existing calendar events block those times automatically.</p>
                 </ActionForm>
+                <TestCalendar action={testCalendar.bind(null, id)} />
             </div>
 
             <div className="card">

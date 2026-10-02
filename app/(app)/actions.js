@@ -6,6 +6,7 @@ import twilio from 'twilio';
 import { requireAdmin, requireSubaccount, requireUser } from 'lib/auth';
 import { createAdminClient } from 'lib/supabase/admin';
 import { csvToContacts } from 'lib/csv';
+import { calendarConfigured, createCalendar } from 'lib/gcal';
 import { toE164 } from 'lib/phone';
 
 const str = (fd, k) => String(fd.get(k) ?? '').trim();
@@ -117,6 +118,20 @@ export async function buyNumber(id, prev, fd) {
     await createAdminClient().from('subaccounts').update({ twilio_number: number }).eq('id', id);
     revalidatePath(`/s/${id}`, 'layout');
     return { message: `Bought and connected ${number}.` };
+}
+
+// Shows exactly what the receptionist would see: open times, or the error.
+export async function testCalendar(id) {
+    const { subaccount } = await requireSubaccount(id);
+    if (!process.env.GOOGLE_CLIENT_EMAIL || !process.env.GOOGLE_PRIVATE_KEY) return { error: 'GOOGLE_CLIENT_EMAIL / GOOGLE_PRIVATE_KEY are not set on this deploy.' };
+    if (!calendarConfigured(subaccount)) return { error: 'No calendar ID saved yet.' };
+    try {
+        const slots = await createCalendar(subaccount).findSlots();
+        if (!slots.length) return { error: 'Calendar connected, but no open times in the next 2 weeks with these hours.' };
+        return { message: `Connected. Next open times: ${slots.map((s) => s.label).join('; ')}` };
+    } catch (err) {
+        return { error: err.message };
+    }
 }
 
 // ---- Contacts ----

@@ -100,3 +100,11 @@ test('private key accepted with or without header lines and escaped newlines', a
         assert.doesNotThrow(() => createPrivateKey(normalizePrivateKey(variant)));
     }
 });
+
+test('booking rule comes after owner instructions when calendar is connected', async () => {
+    const { buildSystemPrompt } = await import('../lib/receptionist.js');
+    const p = buildSystemPrompt({ name: 'NGNM', instructions: 'STEP 7: ask which day and time works best.', calendar_enabled: true });
+    assert.ok(p.indexOf('<booking>') > p.indexOf('</owner_instructions>'));
+    assert.match(p, /call check_availability first/);
+    assert.doesNotMatch(buildSystemPrompt({ name: 'NGNM' }), /<booking>/);
+});
