@@ -24,7 +24,9 @@ no Twilio account linked).
 3. Redo the A2P 10DLC texting registration in Twilio right after upgrading. GHL's "A2P Verified" does not carry
    over. Approval takes 1–3 weeks, so start it alongside the port.
 4. GHL keeps working until the transfer date. On that day calls go to Ari, so the app must be fully tested first.
-- Open question: should 330-476-7348 (GHL default number) also move? Same steps.
+- 330-476-7348 (GHL default number) belongs to the AI Local company sub-account. It moves later, after that
+  sub-account is built out in the new app. Same steps.
+- Owner moves numbers one at a time, so expect a short period where GHL and the new app run side by side.
 
 ## 4. Toll-free verification
 - (877) 549-4401 needs Twilio toll-free verification before it can text customers.
