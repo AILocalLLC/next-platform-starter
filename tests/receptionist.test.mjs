@@ -122,3 +122,32 @@ test('phone call retries on the main model if the fast model rejects the request
     assert.deepEqual(calls, ['claude-sonnet-5', 'claude-opus-5']);
     assert.equal(r.reply, 'Hello!');
 });
+
+test('calendar tool with spoken text pauses, then resumes and finishes', async () => {
+    const calSub = { ...sub, calendar_enabled: true };
+    const calendar = { findSlots: async () => [{ start: '2026-10-05T13:00:00.000Z', label: 'Monday 9:00 AM' }] };
+    const client = fakeClient([
+        { stop_reason: 'tool_use', content: [{ type: 'text', text: 'Let me check.' }, { type: 'tool_use', id: 'c1', name: 'check_availability', input: {} }] },
+        { stop_reason: 'end_turn', content: [{ type: 'text', text: 'I have Monday at 9.' }] }
+    ]);
+    const first = await runTurn({ subaccount: calSub, messages: [], callerText: 'book me', onSaveLead: async () => {}, calendar, yieldBeforeTools: true, client });
+    assert.equal(first.action, 'pending');
+    assert.equal(first.reply, 'Let me check.');
+    assert.equal(client.calls.length, 1);
+
+    const second = await runTurn({ subaccount: calSub, messages: first.messages, callerText: null, onSaveLead: async () => {}, calendar, client });
+    assert.equal(second.action, 'continue');
+    assert.equal(second.reply, 'I have Monday at 9.');
+    assert.equal(second.messages.at(-2).content[0].tool_use_id, 'c1');
+    assert.match(second.messages.at(-2).content[0].content, /Monday 9:00 AM/);
+});
+
+test('save_lead never pauses, so the next caller words are not missed', async () => {
+    const client = fakeClient([
+        { stop_reason: 'tool_use', content: [{ type: 'text', text: 'Thanks Bob.' }, { type: 'tool_use', id: 's1', name: 'save_lead', input: { name: 'Bob', reason: 'Quote' } }] },
+        { stop_reason: 'end_turn', content: [{ type: 'text', text: 'What is your address?' }] }
+    ]);
+    const r = await runTurn({ subaccount: sub, messages: [], callerText: "I'm Bob", onSaveLead: async () => {}, yieldBeforeTools: true, client });
+    assert.equal(r.action, 'continue');
+    assert.equal(r.reply, 'Thanks Bob. What is your address?');
+});
