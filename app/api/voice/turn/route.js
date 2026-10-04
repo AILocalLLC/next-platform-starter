@@ -3,7 +3,7 @@ import { callStartMessage, pendingToolUses, runTurn } from 'lib/receptionist';
 import { bookingContext } from 'lib/booking';
 import { upsertLead } from 'lib/leads';
 import { createAdminClient } from 'lib/supabase/admin';
-import { forbidden, gather, readTwilioRequest, twimlResponse, VOICE } from 'lib/voice';
+import { forbidden, gather, readTwilioRequest, say, twimlResponse, VOICE } from 'lib/voice';
 
 export const maxDuration = 26;
 
@@ -75,13 +75,13 @@ export async function POST(request) {
         .eq('id', call.id);
 
     if (result.action === 'hangup') {
-        twiml.say({ voice: VOICE }, reply);
+        say(twiml, reply);
         twiml.hangup();
     } else if (result.action === 'transfer') {
-        twiml.say({ voice: VOICE }, reply);
+        say(twiml, reply);
         twiml.dial(subaccount.transfer_number);
     } else if (result.action === 'pending') {
-        twiml.say({ voice: VOICE }, reply);
+        say(twiml, reply);
         twiml.redirect({ method: 'POST' }, `/api/voice/turn?call=${call.id}&resume=1`);
     } else {
         gather(twiml, call.id, reply);

@@ -151,3 +151,10 @@ test('save_lead never pauses, so the next caller words are not missed', async ()
     assert.equal(r.action, 'continue');
     assert.equal(r.reply, 'Thanks Bob. What is your address?');
 });
+
+test('silent calendar call still speaks a filler line first', async () => {
+    const client = fakeClient([{ stop_reason: 'tool_use', content: [{ type: 'tool_use', id: 'b1', name: 'book_appointment', input: { start: 'x', name: 'Bob', reason: 'Quote' } }] }]);
+    const r = await runTurn({ subaccount: { ...sub, calendar_enabled: true }, messages: [], callerText: '10 works', onSaveLead: async () => {}, calendar: {}, yieldBeforeTools: true, client });
+    assert.equal(r.action, 'pending');
+    assert.equal(r.reply, 'One moment while I book that.');
+});
