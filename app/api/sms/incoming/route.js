@@ -28,11 +28,16 @@ export async function POST(request) {
         }
     }
 
-    const { error } = await db.from('messages').upsert(
-        { subaccount_id: subaccount.id, contact_id: contact?.id ?? null, direction: 'in', phone, body, media_urls: media, twilio_sid: params.MessageSid, status: 'received' },
-        { onConflict: 'twilio_sid', ignoreDuplicates: true }
-    );
+    const { data: saved, error } = await db
+        .from('messages')
+        .upsert(
+            { subaccount_id: subaccount.id, contact_id: contact?.id ?? null, direction: 'in', phone, body, media_urls: media, twilio_sid: params.MessageSid, status: 'received' },
+            { onConflict: 'twilio_sid', ignoreDuplicates: true }
+        )
+        .select('id');
     if (error && !isMissingTable(error)) console.error('sms save failed', error);
+    // Twilio retried a message we already have: it was forwarded the first time.
+    if (!error && !saved?.length) return EMPTY();
 
     // Owner's own texts to the business line are not forwarded back to them.
     if (!fromOwner && subaccount.notify_phone && process.env.TWILIO_ACCOUNT_SID) {

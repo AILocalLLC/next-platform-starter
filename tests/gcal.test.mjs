@@ -108,3 +108,8 @@ test('booking rule comes after owner instructions when calendar is connected', a
     assert.match(p, /call check_availability first/);
     assert.doesNotMatch(buildSystemPrompt({ name: 'NGNM' }), /<booking>/);
 });
+
+test('no bookable days checked means no slots, not Sunday', () => {
+    assert.deepEqual(bookingSettings({ booking_days: '' }).days, []);
+    assert.deepEqual(bookingSettings({ booking_days: '1,6' }).days, [1, 6]);
+});

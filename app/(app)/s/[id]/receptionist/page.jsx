@@ -16,7 +16,7 @@ export default async function ReceptionistPage({ params }) {
     const { id } = await params;
     const { subaccount: s } = await requireSubaccount(id);
     const serviceEmail = process.env.GOOGLE_PRIVATE_KEY ? process.env.GOOGLE_CLIENT_EMAIL : null;
-    const bookDays = String(s.booking_days ?? '1,2,3,4,5').split(',').map(Number);
+    const bookDays = String(s.booking_days ?? '1,2,3,4,5').split(',').filter((d) => /^[0-6]$/.test(d.trim())).map(Number);
     const base = (process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '');
     const snippet = `<script src="${base}/widget.js" data-account="${s.id}" data-color="${brand.color}" async></script>`;
 

@@ -17,13 +17,17 @@ export async function POST(request) {
     }
 
     const db = createAdminClient();
-    const { data: call } = await db.from('calls').select('id, from_number, transcript, twilio_call_sid, subaccounts(*)').eq('id', search.get('call')).maybeSingle();
+    const { data: call } = await db.from('calls').select('id, from_number, transcript, summary, twilio_call_sid, subaccounts(*)').eq('id', search.get('call')).maybeSingle();
     if (!call || call.twilio_call_sid !== params.CallSid) return forbidden();
 
     const text = params.TranscriptionStatus === 'completed' && params.TranscriptionText ? params.TranscriptionText.trim() : '(could not transcribe; listen in Twilio)';
     await db
         .from('calls')
-        .update({ transcript: [...call.transcript, { role: 'caller', text: `Voicemail: ${text}`, at: new Date().toISOString() }] })
+        .update({
+            transcript: [...call.transcript, { role: 'caller', text: `Voicemail: ${text}`, at: new Date().toISOString() }],
+            // The call usually ends (and is summarized) before Twilio finishes the transcription.
+            ...(call.summary ? { summary: `${call.summary} Voicemail: ${text}` } : {})
+        })
         .eq('id', call.id);
 
     const subaccount = call.subaccounts;

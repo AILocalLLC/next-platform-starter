@@ -18,8 +18,10 @@ const CORS = {
 const json = (body, status = 200) => Response.json(body, { status, headers: CORS });
 
 function tokenMatches(a, b) {
-    if (!a || !b || a.length !== b.length) return false;
-    return timingSafeEqual(Buffer.from(a), Buffer.from(b));
+    if (typeof a !== 'string' || typeof b !== 'string') return false;
+    const x = Buffer.from(a);
+    const y = Buffer.from(b);
+    return x.length === y.length && timingSafeEqual(x, y);
 }
 
 async function loadSubaccount(db, id) {

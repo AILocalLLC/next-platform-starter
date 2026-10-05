@@ -25,9 +25,10 @@ export default async function MessagesPage({ params, searchParams }) {
     const names = Object.fromEntries((contactRows ?? []).filter((c) => c.name).map((c) => [c.phone, c.name]));
     const label = (p) => names[p] || formatPhone(p);
 
-    const { data: thread } = phone
-        ? await supabase.from('messages').select('*').eq('subaccount_id', id).eq('phone', phone).order('created_at', { ascending: true }).limit(300)
+    const { data: newest } = phone
+        ? await supabase.from('messages').select('*').eq('subaccount_id', id).eq('phone', phone).order('created_at', { ascending: false }).limit(300)
         : { data: null };
+    const thread = newest ? [...newest].reverse() : null;
 
     return (
         <div className="grid gap-6 lg:grid-cols-3">
