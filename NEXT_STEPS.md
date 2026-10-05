@@ -1,6 +1,10 @@
 # Next session: start here
 
-Paused 2026-10-04. No changes pending. Latest deployed commit: c4dea9d (live on ailocal-platform.netlify.app).
+Updated 2026-10-05. Full porting runbook: PORTING.md.
+
+## 0. One-time database update (owner, 1 minute)
+- Supabase → SQL Editor → paste `supabase/migrations/0004_messages.sql` → Run. Turns on the Messages inbox.
+  Until then incoming texts are still forwarded to the owner's phone, just not saved in the app.
 
 ## 1. Upgrade Twilio (owner)
 - Console → Upgrade account → pay-as-you-go. Add ~$20 and turn on auto-recharge (e.g. +$20 when under $10).

@@ -22,6 +22,7 @@ See `.env.example`. Required: Supabase URL/keys, `ANTHROPIC_API_KEY`, Twilio SID
 - Point the client's business line (call forwarding / no-answer forwarding) to the AI number.
 - **Team**: invite users; members only see the subaccounts you tick.
 - **Contacts → Import from CSV**: bring over Go High Level contacts (Contacts → Export in GHL). Duplicates are skipped.
+- **Messages**: two-way texting on the subaccount's number. Incoming texts land here and are forwarded to the owner's lead SMS number; reply from the app. Needs `supabase/migrations/0004_messages.sql` run once in the Supabase SQL editor (until then, texts are still forwarded to the owner, just not saved).
 - **AI receptionist → Website chat**: turn it on and paste the snippet into the client's website. Same AI, same business info; leads land in Contacts and the owner gets a text.
 
 ## Calendar booking (Google Calendar)
@@ -39,7 +40,7 @@ The AI then offers open times, books them on the calendar, and texts the caller 
 4. Cutover day: point every number at the new system (Settings → Connect number), swap website chat snippets, then change DNS.
 
 ## How calls work
-Twilio → `/api/voice/incoming` (greeting) → caller speaks → `/api/voice/turn` (Claude replies, can save the lead, transfer, or hang up) → loop. When the call ends Twilio hits `/api/voice/status`, which writes a summary and texts the owner if a lead was captured. All webhooks verify Twilio's signature.
+Twilio → `/api/voice/incoming` (greeting) → caller speaks → `/api/voice/turn` (Claude replies, can save the lead, check/book the calendar, transfer, or hang up) → loop. If the AI is unavailable, the caller is transferred (if a transfer number is set) or asked to leave a voicemail, whose transcription is texted to the owner (`/api/voice/voicemail`). Texts go to `/api/sms/incoming`. When the call ends Twilio hits `/api/voice/status`, which writes a summary and texts the owner if a lead was captured. All webhooks verify Twilio's signature.
 
 ## Develop
 ```

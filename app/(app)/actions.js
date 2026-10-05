@@ -8,6 +8,7 @@ import { createAdminClient } from 'lib/supabase/admin';
 import { csvToContacts } from 'lib/csv';
 import { calendarConfigured, createCalendar } from 'lib/gcal';
 import { toE164 } from 'lib/phone';
+import { isMissingTable } from 'lib/sms';
 
 const str = (fd, k) => String(fd.get(k) ?? '').trim();
 const opt = (fd, k) => str(fd, k) || null;
@@ -23,6 +24,8 @@ function webhookUrls() {
     return {
         voiceUrl: `${base}/api/voice/incoming`,
         voiceMethod: 'POST',
+        smsUrl: `${base}/api/sms/incoming`,
+        smsMethod: 'POST',
         statusCallback: `${base}/api/voice/status`,
         statusCallbackMethod: 'POST'
     };
@@ -135,6 +138,31 @@ export async function testCalendar(id) {
 }
 
 // ---- Contacts ----
+
+// ---- Texting ----
+
+export async function sendText(subaccountId, phone, prev, fd) {
+    const { supabase, user, subaccount } = await requireSubaccount(subaccountId);
+    const body = str(fd, 'body');
+    const to = toE164(phone || str(fd, 'phone'));
+    if (!body) return { error: 'Type a message.' };
+    if (body.length > 1600) return { error: 'Keep texts under 1,600 characters.' };
+    if (!to) return { error: 'No phone number.' };
+    if (!subaccount.twilio_number) return { error: 'Connect a phone number in Settings first.' };
+    let sent;
+    try {
+        sent = await twilioClient().messages.create({ from: subaccount.twilio_number, to, body });
+    } catch (err) {
+        return { error: err.message };
+    }
+    const { data: contact } = await supabase.from('contacts').select('id').eq('subaccount_id', subaccountId).eq('phone', to).limit(1).maybeSingle();
+    const { error } = await supabase
+        .from('messages')
+        .insert({ subaccount_id: subaccountId, contact_id: contact?.id ?? null, direction: 'out', phone: to, body, twilio_sid: sent.sid, status: sent.status, sent_by: user.id });
+    if (error && !isMissingTable(error)) return { error: `Sent, but not saved: ${error.message}` };
+    revalidatePath(`/s/${subaccountId}/messages`);
+    return { message: 'Sent.' };
+}
 
 export async function addContact(subaccountId, prev, fd) {
     const { supabase } = await requireSubaccount(subaccountId);

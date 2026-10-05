@@ -5,6 +5,7 @@ import { formatPhone } from 'lib/stats';
 const TABS = [
     ['', 'Overview'],
     ['/calls', 'Calls'],
+    ['/messages', 'Messages'],
     ['/contacts', 'Contacts'],
     ['/receptionist', 'AI receptionist'],
     ['/settings', 'Settings']

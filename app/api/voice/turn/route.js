@@ -7,7 +7,8 @@ import { forbidden, gather, readTwilioRequest, say, twimlResponse, VOICE } from 
 
 export const maxDuration = 26;
 
-const FALLBACK = "Sorry, I'm having trouble right now. Someone from the team will call you back shortly. Goodbye!";
+const TRANSFER_FALLBACK = "Sorry, I'm having trouble right now. Let me connect you with someone on the team.";
+const VOICEMAIL_FALLBACK = "Sorry, I'm having trouble right now. Please leave your name, number, and what you need after the tone, and someone will call you back shortly.";
 
 export async function POST(request) {
     const params = await readTwilioRequest(request);
@@ -62,7 +63,10 @@ export async function POST(request) {
         result = await runTurn({ ...booking, messages: call.messages, callerText, onSaveLead, yieldBeforeTools: !resume });
     } catch (err) {
         console.error('receptionist turn failed', err);
-        result = { messages: call.messages, reply: FALLBACK, action: 'hangup' };
+        // Never drop the caller: hand them to a person if we can, otherwise take a voicemail.
+        result = subaccount.transfer_number
+            ? { messages: call.messages, reply: TRANSFER_FALLBACK, action: 'transfer' }
+            : { messages: call.messages, reply: VOICEMAIL_FALLBACK, action: 'voicemail' };
     }
 
     const reply = result.reply || (resume && result.action === 'continue' ? '' : result.action === 'continue' ? 'Sorry, could you say that again?' : 'Goodbye!');
@@ -80,6 +84,15 @@ export async function POST(request) {
     } else if (result.action === 'transfer') {
         say(twiml, reply);
         twiml.dial(subaccount.transfer_number);
+    } else if (result.action === 'voicemail') {
+        say(twiml, reply);
+        twiml.record({
+            maxLength: 120,
+            playBeep: true,
+            transcribe: true,
+            transcribeCallback: `/api/voice/voicemail?call=${call.id}`,
+            action: `/api/voice/voicemail?call=${call.id}&done=1`
+        });
     } else if (result.action === 'pending') {
         say(twiml, reply);
         twiml.redirect({ method: 'POST' }, `/api/voice/turn?call=${call.id}&resume=1`);
