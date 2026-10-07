@@ -31,7 +31,8 @@ export default function SmsConsentPage() {
             <h2 className="text-lg font-semibold">Privacy</h2>
             <p>
                 Mobile numbers and text message consent are never sold or shared with third parties or affiliates for marketing purposes. Phone numbers
-                are used only to contact the customer about their own request.
+                are used only to contact the customer about their own request. See our <a className="underline" href="/privacy">Privacy Policy</a> and{' '}
+                <a className="underline" href="/terms">Terms of Service</a>.
             </p>
         </main>
     );
