@@ -16,6 +16,14 @@ Updated 2026-10-05. Full porting runbook: PORTING.md.
   (gaining SID given). Senior specialist replies by email. When the number appears in Twilio it has NO webhooks:
   connect it in the app immediately (Settings -> Connect) or calls go nowhere.
 
+- Texting registrations submitted by Claude via API (2026-10-07), all under New Gutters Near Me LLC (EIN profile BUfb32…):
+  - A2P brand BNca0f66… APPROVED (low-volume standard).
+  - A2P campaign QE2c6890… (MIXED) on Messaging Service MG0220a1… - pending carrier review. Add 330-919-6167 to this
+    service when it arrives (the hourly port watch does it).
+  - Toll-free verification HHa9d940… for (877) 549-4401 - PENDING_REVIEW.
+  - Public consent page: https://ailocal-platform.netlify.app/sms-consent
+  - AI Local's own number (330-476-7348) will need a separate AI Local LLC profile/brand later.
+
 ## 1. Upgrade Twilio (owner) - DONE
 - Console → Upgrade account → pay-as-you-go. Add ~$20 and turn on auto-recharge (e.g. +$20 when under $10).
 - Why: the trial account blocks texts to unverified numbers and plays a "press any key" trial message on calls,
