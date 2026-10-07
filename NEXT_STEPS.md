@@ -6,7 +6,13 @@ Updated 2026-10-05. Full porting runbook: PORTING.md.
 - Supabase → SQL Editor → paste `supabase/migrations/0004_messages.sql` → Run. Turns on the Messages inbox.
   Until then incoming texts are still forwarded to the owner's phone, just not saved in the app.
 
-## 1. Upgrade Twilio (owner)
+## Status 2026-10-07
+- Twilio upgraded (Full, $50). Scripted test call from the verified 330-488-4225 to the 877 line booked Oct 14 8am end to end;
+  replies 0.9–2s, calendar fillers worked, numbers read digit by digit. Keep-warm schedule added (first-ring delay was ~5s).
+- Texts from the 877 line fail with 30032 until toll-free verification is approved -> owner alerts and confirmations blocked.
+- Delete the test estimates (Sam Tester Oct 14 8am; Richard Cranium Oct 6) from sales@ calendar.
+
+## 1. Upgrade Twilio (owner) - DONE
 - Console → Upgrade account → pay-as-you-go. Add ~$20 and turn on auto-recharge (e.g. +$20 when under $10).
 - Why: the trial account blocks texts to unverified numbers and plays a "press any key" trial message on calls,
   which is why Claude's scripted test calls hung up after 13s.
