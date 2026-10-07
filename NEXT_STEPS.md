@@ -12,6 +12,10 @@ Updated 2026-10-05. Full porting runbook: PORTING.md.
 - Texts from the 877 line fail with 30032 until toll-free verification is approved -> owner alerts and confirmations blocked.
 - Delete the test estimates (Sam Tester Oct 14 8am; Richard Cranium Oct 6) from sales@ calendar.
 
+- 330-919-6167: GHL ticket #6491290 (2026-10-07). GHL is doing a direct transfer from LC Phone into our Twilio account
+  (gaining SID given). Senior specialist replies by email. When the number appears in Twilio it has NO webhooks:
+  connect it in the app immediately (Settings -> Connect) or calls go nowhere.
+
 ## 1. Upgrade Twilio (owner) - DONE
 - Console → Upgrade account → pay-as-you-go. Add ~$20 and turn on auto-recharge (e.g. +$20 when under $10).
 - Why: the trial account blocks texts to unverified numbers and plays a "press any key" trial message on calls,
