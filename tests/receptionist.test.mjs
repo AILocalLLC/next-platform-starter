@@ -169,3 +169,31 @@ test('phone turns run without thinking and with a cached system prompt; web keep
     assert.deepEqual(phone.system[0].cache_control, { type: 'ephemeral' });
     assert.equal(r.timing.cached, 4000);
 });
+
+test('a lead save that already asks the next question skips the second AI round on calls', async () => {
+    const client = fakeClient([
+        { stop_reason: 'tool_use', content: [{ type: 'text', text: 'Thanks Bob. What is your address?' }, { type: 'tool_use', id: 's1', name: 'save_lead', input: { name: 'Bob', reason: 'Quote' } }] }
+    ]);
+    const saved = [];
+    const r = await runTurn({ subaccount: sub, messages: [], callerText: "I'm Bob, 330 555 1212", onSaveLead: async (l) => saved.push(l), yieldBeforeTools: true, client });
+    assert.equal(client.calls.length, 1);
+    assert.equal(saved.length, 1);
+    assert.equal(r.reply, 'Thanks Bob. What is your address?');
+    assert.equal(r.messages.at(-1).role, 'user');
+    assert.equal(r.messages.at(-1).content[0].tool_use_id, 's1');
+
+    // The next caller turn follows the saved result and the conversation carries on normally.
+    const client2 = fakeClient([{ stop_reason: 'end_turn', content: [{ type: 'text', text: 'Got it.' }] }]);
+    const next = await runTurn({ subaccount: sub, messages: r.messages, callerText: '12 Main St', onSaveLead: async () => {}, client: client2 });
+    assert.equal(next.reply, 'Got it.');
+    assert.equal(client2.calls[0].messages.at(-2).content[0].type, 'tool_result');
+});
+
+test('web chat still loops after a lead save', async () => {
+    const client = fakeClient([
+        { stop_reason: 'tool_use', content: [{ type: 'text', text: 'Thanks! Anything else?' }, { type: 'tool_use', id: 's1', name: 'save_lead', input: { name: 'Bob', reason: 'Quote' } }] },
+        { stop_reason: 'end_turn', content: [{ type: 'text', text: 'Saved.' }] }
+    ]);
+    await runTurn({ subaccount: sub, messages: [], callerText: 'hi', onSaveLead: async () => {}, client, channel: 'web' });
+    assert.equal(client.calls.length, 2);
+});
