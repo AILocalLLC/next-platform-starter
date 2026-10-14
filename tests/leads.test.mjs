@@ -56,3 +56,13 @@ test('caller confirmation text', () => {
     assert.match(confirmationText({ name: 'X' }, { name: '' }), /^Thanks! X got/);
     assert.equal(confirmationText({ name: 'NGNM' }, { name: 'Ann' }, 'Monday, October 5 at 11:00 AM'), 'Thanks Ann! Your NGNM appointment is booked for Monday, October 5 at 11:00 AM. Reply STOP to opt out.');
 });
+
+test('call summary is appended to contact notes without markdown', async () => {
+    const { notesWithSummary } = await import('../lib/leads.js');
+    const at = '2026-10-14T20:40:00Z';
+    assert.equal(notesWithSummary('Service: Gutter guards', '**Call summary**\nWants new gutters plus guards at 882 Seneca St.', at),
+        'Service: Gutter guards\n\nCall summary (Oct 14, 2026):\nCall summary\nWants new gutters plus guards at 882 Seneca St.');
+    assert.equal(notesWithSummary('', 'Callback requested.', at), 'Call summary (Oct 14, 2026):\nCallback requested.');
+    assert.equal(notesWithSummary('x', 'Summary unavailable.', at), null);
+    assert.equal(notesWithSummary('x', '', at), null);
+});
