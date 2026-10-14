@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import Anthropic from '@anthropic-ai/sdk';
-import { buildSystemPrompt, buildTools, runTurn } from '../lib/receptionist.js';
+import { buildSystemPrompt, buildTools, runTurn, warmPromptCache } from '../lib/receptionist.js';
 import { dailyCounts, summarize, formatPhone } from '../lib/stats.js';
 import { toE164 } from '../lib/phone.js';
 
@@ -157,4 +157,23 @@ test('silent calendar call still speaks a filler line first', async () => {
     const r = await runTurn({ subaccount: { ...sub, calendar_enabled: true }, messages: [], callerText: '10 works', onSaveLead: async () => {}, calendar: {}, yieldBeforeTools: true, client });
     assert.equal(r.action, 'pending');
     assert.equal(r.reply, 'One moment while I book that.');
+});
+
+test('cache warm-up sends the same cached prefix as a real turn, with no output', async () => {
+    const client = fakeClient([{ stop_reason: 'max_tokens', content: [] }, { stop_reason: 'end_turn', content: [{ type: 'text', text: 'Hi' }], usage: { cache_read_input_tokens: 4000 } }]);
+    await warmPromptCache(sub, 'phone', client);
+    const r = await runTurn({ subaccount: sub, messages: [], callerText: 'Hello', onSaveLead: async () => {}, client });
+    const [warm, real] = client.calls;
+    assert.equal(warm.max_tokens, 0);
+    assert.equal(warm.model, real.model);
+    assert.deepEqual(warm.system, real.system);
+    assert.deepEqual(warm.tools, real.tools);
+    assert.deepEqual(warm.output_config, real.output_config);
+    assert.deepEqual(real.system[0].cache_control, { type: 'ephemeral' });
+    assert.equal(r.timing.cached, 4000);
+});
+
+test('a failed cache warm-up never throws', async () => {
+    const client = { beta: { messages: { create: async () => { throw new Error('overloaded'); } } } };
+    await warmPromptCache(sub, 'phone', client);
 });

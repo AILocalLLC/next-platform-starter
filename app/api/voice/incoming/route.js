@@ -1,4 +1,6 @@
+import { unstable_after as after } from 'next/server';
 import twilio from 'twilio';
+import { warmPromptCache } from 'lib/receptionist';
 import { createAdminClient } from 'lib/supabase/admin';
 import { forbidden, gather, readTwilioRequest, twimlResponse, VOICE } from 'lib/voice';
 
@@ -41,6 +43,8 @@ export async function POST(request) {
         return twimlResponse(twiml);
     }
 
+    // Warm the prompt cache while the greeting plays, so the first reply isn't slowed by a cold cache.
+    after(() => warmPromptCache(subaccount));
     gather(twiml, call.id, subaccount.greeting);
     return twimlResponse(twiml);
 }
