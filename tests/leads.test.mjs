@@ -61,8 +61,17 @@ test('call summary is appended to contact notes without markdown', async () => {
     const { notesWithSummary } = await import('../lib/leads.js');
     const at = '2026-10-14T20:40:00Z';
     assert.equal(notesWithSummary('Service: Gutter guards', '**Call summary**\nWants new gutters plus guards at 882 Seneca St.', at),
-        'Service: Gutter guards\n\nCall summary (Oct 14, 2026):\nCall summary\nWants new gutters plus guards at 882 Seneca St.');
+        'Service: Gutter guards\n\nCall summary (Oct 14, 2026):\nWants new gutters plus guards at 882 Seneca St.');
     assert.equal(notesWithSummary('', 'Callback requested.', at), 'Call summary (Oct 14, 2026):\nCallback requested.');
     assert.equal(notesWithSummary('x', 'Summary unavailable.', at), null);
     assert.equal(notesWithSummary('x', '', at), null);
+});
+
+test('cleanSummary strips markdown and the leading Summary label', async () => {
+    const { cleanSummary } = await import('../lib/leads.js');
+    assert.equal(cleanSummary('**Summary:** Pat Cutover wants new gutters.\n\nPat asked for a **callback**.'),
+        'Pat Cutover wants new gutters.\n\nPat asked for a callback.');
+    assert.equal(cleanSummary('## Call Summary\nCallback requested.'), 'Callback requested.');
+    assert.equal(cleanSummary('Summary unavailable.'), 'Summary unavailable.');
+    assert.equal(cleanSummary(null), '');
 });
