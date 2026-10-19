@@ -1,5 +1,5 @@
 import twilio from 'twilio';
-import { callGuard, callStartMessage, pendingToolUses, runTurn, wrapUpLine } from 'lib/receptionist';
+import { callGuard, callStartMessage, closingLine, pendingToolUses, runTurn, wrapUpLine } from 'lib/receptionist';
 import { bookingContext } from 'lib/booking';
 import { upsertLead } from 'lib/leads';
 import { createAdminClient } from 'lib/supabase/admin';
@@ -37,7 +37,7 @@ export async function POST(request) {
         if (silent <= 1) {
             gather(twiml, call.id, 'Are you still there?', silent);
         } else {
-            twiml.say({ voice: VOICE }, 'I did not hear anything, so I will let you go. Goodbye!');
+            twiml.say({ voice: VOICE }, `I didn't hear anything, so I'll let you go. ${closingLine(subaccount)}`);
             twiml.hangup();
         }
         return twimlResponse(twiml);
@@ -78,7 +78,7 @@ export async function POST(request) {
         console.log('call guard', call.id, 'looping');
         result = { ...result, reply: wrapUpLine(subaccount, Boolean(state.contactId)), action: 'hangup' };
     }
-    const reply = result.reply || (resume && result.action === 'continue' ? '' : result.action === 'continue' ? 'Sorry, could you say that again?' : 'Goodbye!');
+    const reply = result.reply || (resume && result.action === 'continue' ? '' : result.action === 'continue' ? 'Sorry, could you say that again?' : closingLine(subaccount));
     const timing = { ...result.timing, load: loadMs, total: Date.now() - t0 };
     console.log('voice turn timing', call.id, JSON.stringify(timing));
     if (reply) transcript.push({ role: 'ai', text: reply, at: new Date().toISOString(), timing });
