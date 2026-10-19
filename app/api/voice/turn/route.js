@@ -1,5 +1,5 @@
 import twilio from 'twilio';
-import { callStartMessage, pendingToolUses, runTurn } from 'lib/receptionist';
+import { callGuard, callStartMessage, pendingToolUses, runTurn, wrapUpLine } from 'lib/receptionist';
 import { bookingContext } from 'lib/booking';
 import { upsertLead } from 'lib/leads';
 import { createAdminClient } from 'lib/supabase/admin';
@@ -59,16 +59,25 @@ export async function POST(request) {
     const booking = bookingContext({ db, subaccount, callId: call.id, fallbackPhone: call.from_number, source: 'ai_receptionist', state });
 
     let result;
-    try {
-        result = await runTurn({ ...booking, messages: call.messages, callerText, onSaveLead, yieldBeforeTools: !resume });
-    } catch (err) {
-        console.error('receptionist turn failed', err);
-        // Never drop the caller: hand them to a person if we can, otherwise take a voicemail.
-        result = subaccount.transfer_number
-            ? { messages: call.messages, reply: TRANSFER_FALLBACK, action: 'transfer' }
-            : { messages: call.messages, reply: VOICEMAIL_FALLBACK, action: 'voicemail' };
+    const stop = callGuard({ transcript, startedAt: call.started_at });
+    if (stop) {
+        console.log('call guard', call.id, stop);
+        result = { messages: call.messages, reply: wrapUpLine(subaccount, Boolean(state.contactId)), action: 'hangup' };
+    } else {
+        try {
+            result = await runTurn({ ...booking, messages: call.messages, callerText, onSaveLead, yieldBeforeTools: !resume });
+        } catch (err) {
+            console.error('receptionist turn failed', err);
+            // Never drop the caller: hand them to a person if we can, otherwise take a voicemail.
+            result = subaccount.transfer_number
+                ? { messages: call.messages, reply: TRANSFER_FALLBACK, action: 'transfer' }
+                : { messages: call.messages, reply: VOICEMAIL_FALLBACK, action: 'voicemail' };
+        }
     }
-
+    if (result.reply && result.action === 'continue' && callGuard({ transcript, nextReply: result.reply })) {
+        console.log('call guard', call.id, 'looping');
+        result = { ...result, reply: wrapUpLine(subaccount, Boolean(state.contactId)), action: 'hangup' };
+    }
     const reply = result.reply || (resume && result.action === 'continue' ? '' : result.action === 'continue' ? 'Sorry, could you say that again?' : 'Goodbye!');
     const timing = { ...result.timing, load: loadMs, total: Date.now() - t0 };
     console.log('voice turn timing', call.id, JSON.stringify(timing));
