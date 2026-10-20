@@ -17,12 +17,20 @@ export async function POST(request) {
     } catch {
         return Response.json({ status: 'bad-json' }, { status: 400 });
     }
-    if (!msg?.slug || !msg?.body || (!msg.test && !msg.to)) {
+    if ((!msg?.slug && !msg?.from) || !msg?.body || (!msg.test && !msg.to)) {
         return Response.json({ status: 'missing-fields' }, { status: 400 });
     }
 
     const db = createAdminClient();
-    const { data: subaccount } = await db.from('subaccounts').select('twilio_number, notify_phone').eq('crm_funnel_slug', String(msg.slug)).maybeSingle();
+    // Find the business by its CRM form, or (for automations not started by a form) by its texting number.
+    let subaccount = null;
+    if (msg.slug) {
+        ({ data: subaccount } = await db.from('subaccounts').select('twilio_number, notify_phone').eq('crm_funnel_slug', String(msg.slug)).maybeSingle());
+    }
+    if (!subaccount && msg.from) {
+        const from = toE164(String(msg.from));
+        if (from) ({ data: subaccount } = await db.from('subaccounts').select('twilio_number, notify_phone').eq('twilio_number', from).maybeSingle());
+    }
     if (!subaccount) return Response.json({ status: 'no-business' }, { status: 404 });
     if (!subaccount.twilio_number || !process.env.TWILIO_ACCOUNT_SID) return Response.json({ status: 'no-number' }, { status: 409 });
 
