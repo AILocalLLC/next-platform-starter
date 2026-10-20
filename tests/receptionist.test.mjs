@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import Anthropic from '@anthropic-ai/sdk';
-import { buildSystemPrompt, buildTools, runTurn } from '../lib/receptionist.js';
+import { awaitingReply, buildSystemPrompt, buildTools, runTurn, stripSaveNarration } from '../lib/receptionist.js';
 import { dailyCounts, summarize, formatPhone } from '../lib/stats.js';
 import { toE164 } from '../lib/phone.js';
 
@@ -142,14 +142,69 @@ test('calendar tool with spoken text pauses, then resumes and finishes', async (
     assert.match(second.messages.at(-2).content[0].content, /Monday 9:00 AM/);
 });
 
-test('save_lead never pauses, so the next caller words are not missed', async () => {
+test('a lead save without a question saves at once, speaks right away, and fetches the next question on resume', async () => {
     const client = fakeClient([
         { stop_reason: 'tool_use', content: [{ type: 'text', text: 'Thanks Bob.' }, { type: 'tool_use', id: 's1', name: 'save_lead', input: { name: 'Bob', reason: 'Quote' } }] },
         { stop_reason: 'end_turn', content: [{ type: 'text', text: 'What is your address?' }] }
     ]);
+    const saved = [];
+    const r = await runTurn({ subaccount: sub, messages: [], callerText: "I'm Bob", onSaveLead: async (l) => saved.push(l), yieldBeforeTools: true, client });
+    assert.equal(saved.length, 1, 'lead saved before speaking, so a dropped call keeps it');
+    assert.equal(client.calls.length, 1);
+    assert.equal(r.action, 'pending');
+    assert.equal(r.reply, 'Thanks Bob.');
+    assert.equal(awaitingReply(r.messages), true);
+
+    const next = await runTurn({ subaccount: sub, messages: r.messages, callerText: null, onSaveLead: async () => {}, client });
+    assert.equal(next.action, 'continue');
+    assert.equal(next.reply, 'What is your address?');
+    assert.equal(saved.length, 1, 'not saved twice');
+    assert.equal(awaitingReply(next.messages), false);
+});
+
+test('a silent lead save still runs the next round inline', async () => {
+    const client = fakeClient([
+        { stop_reason: 'tool_use', content: [{ type: 'text', text: 'Let me save that now.' }, { type: 'tool_use', id: 's1', name: 'save_lead', input: { name: 'Bob', reason: 'Quote' } }] },
+        { stop_reason: 'end_turn', content: [{ type: 'text', text: 'What is your address?' }] }
+    ]);
     const r = await runTurn({ subaccount: sub, messages: [], callerText: "I'm Bob", onSaveLead: async () => {}, yieldBeforeTools: true, client });
     assert.equal(r.action, 'continue');
-    assert.equal(r.reply, 'Thanks Bob. What is your address?');
+    assert.equal(r.reply, 'What is your address?');
+});
+
+test('stripSaveNarration drops record-keeping announcements and keeps everything else', () => {
+    const cases = [
+        ["Thanks, I have 330-555-0142 as your callback number. Let me save that now. Thanks, Dana. What's the full address?", "Thanks, I have 330-555-0142 as your callback number. Thanks, Dana. What's the full address?"],
+        ["No problem, Dana. Before you go, I'll make sure your details are complete.", 'No problem, Dana.'],
+        ["I'll save your details with the new gutter request before we go. Thanks for calling!", 'Thanks for calling!'],
+        ['Your details are saved. What day works?', 'What day works?'],
+        // Kept: questions, read-backs, sales talk, abbreviations.
+        ['Would you like me to update the address on file?', 'Would you like me to update the address on file?'],
+        ['Is that still current, or should I update it?', 'Is that still current, or should I update it?'],
+        ['Want me to save that 10 AM slot for you?', 'Want me to save that 10 AM slot for you?'],
+        ["Got it, I've updated your number to 330-555-0142.", "Got it, I've updated your number to 330-555-0142."],
+        ['Gutter guards save you from cleaning, and that is covered by warranty.', 'Gutter guards save you from cleaning, and that is covered by warranty.'],
+        ['Thanks, Mr. Smith, let me save that. What day works?', 'Thanks, Mr. Smith, let me save that. What day works?'],
+        ['Got it, 12 Main St. in Massillon.', 'Got it, 12 Main St. in Massillon.'],
+        ['Your details are saved.', '']
+    ];
+    for (const [input, want] of cases) assert.equal(stripSaveNarration(input), want, input);
+});
+
+test('a reply that is only record-keeping talk is still spoken rather than leaving silence', async () => {
+    const client = fakeClient([{ stop_reason: 'end_turn', content: [{ type: 'text', text: 'Your details are saved.' }] }]);
+    const r = await runTurn({ subaccount: sub, messages: [], callerText: 'ok', onSaveLead: async () => {}, client });
+    assert.equal(r.reply, 'Your details are saved.');
+});
+
+test('a save whose question was stripped is not mistaken for a statement', async () => {
+    const client = fakeClient([
+        { stop_reason: 'tool_use', content: [{ type: 'text', text: 'Thanks Bob. Should I update the number on file?' }, { type: 'tool_use', id: 's1', name: 'save_lead', input: { name: 'Bob', reason: 'Quote' } }] }
+    ]);
+    const r = await runTurn({ subaccount: sub, messages: [], callerText: "I'm Bob", onSaveLead: async () => {}, yieldBeforeTools: true, client });
+    assert.equal(r.action, 'continue');
+    assert.equal(client.calls.length, 1);
+    assert.equal(r.reply, 'Thanks Bob. Should I update the number on file?');
 });
 
 test('silent calendar call still speaks a filler line first', async () => {

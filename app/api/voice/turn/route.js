@@ -1,5 +1,5 @@
 import twilio from 'twilio';
-import { callGuard, callStartMessage, closingLine, pendingToolUses, runTurn, wrapUpLine } from 'lib/receptionist';
+import { awaitingReply, callGuard, callStartMessage, closingLine, runTurn, wrapUpLine } from 'lib/receptionist';
 import { bookingContext } from 'lib/booking';
 import { upsertLead } from 'lib/leads';
 import { createAdminClient } from 'lib/supabase/admin';
@@ -18,7 +18,8 @@ export async function POST(request) {
     const search = new URL(request.url).searchParams;
     const callId = search.get('call');
     const silent = Number(search.get('silent') || 0);
-    // Second half of a turn that already spoke "let me check..." and now runs its calendar tools.
+    // Second half of a turn that already spoke ("let me check...", or words that came with a lead save)
+    // and now runs its calendar tools or fetches the next question.
     const resume = search.get('resume') === '1';
     const db = createAdminClient();
     const twiml = new twilio.twiml.VoiceResponse();
@@ -29,7 +30,7 @@ export async function POST(request) {
     const loadMs = Date.now() - t0;
 
     const speech = (params.SpeechResult || '').trim();
-    if (resume && !pendingToolUses(call.messages).length) {
+    if (resume && !awaitingReply(call.messages)) {
         gather(twiml, call.id, '');
         return twimlResponse(twiml);
     }
