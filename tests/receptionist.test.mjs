@@ -245,3 +245,11 @@ test('runTurn sends the business voice_model on phone calls', async () => {
     assert.equal(client.calls[0].model, 'claude-haiku-5-5');
     assert.equal(r.timing.model, 'claude-haiku-5-5');
 });
+
+test('phone save_lead tells the model to ask its next question in the same message', () => {
+    const phone = buildTools(sub, 'phone').find((t) => t.name === 'save_lead');
+    const web = buildTools(sub, 'web').find((t) => t.name === 'save_lead');
+    assert.match(phone.description, /same message as your next question/);
+    assert.match(phone.description, /end_call/);
+    assert.doesNotMatch(web.description, /end_call/);
+});
