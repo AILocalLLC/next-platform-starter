@@ -229,3 +229,19 @@ test('closing and wrap-up lines use each business name', async () => {
         assert.match(wrapUpLine({ name }, false), new RegExp(`Thanks for calling ${name}`));
     }
 });
+
+test('modelParams uses a business voice_model only when it is on the allowed list', async () => {
+    const { modelParams, VOICE_MODEL } = await import('../lib/receptionist.js');
+    assert.equal(modelParams('phone').model, VOICE_MODEL);
+    assert.equal(modelParams('phone', 'claude-haiku-5-5').model, 'claude-haiku-5-5');
+    assert.equal(modelParams('phone', 'gpt-5').model, VOICE_MODEL);
+    assert.deepEqual(modelParams('phone', 'claude-haiku-5-5').thinking, { type: 'disabled' });
+    assert.notEqual(modelParams('web', 'claude-haiku-5-5').model, 'claude-haiku-5-5');
+});
+
+test('runTurn sends the business voice_model on phone calls', async () => {
+    const client = fakeClient([{ content: [{ type: 'text', text: 'Hi!' }], stop_reason: 'end_turn', model: 'claude-haiku-5-5' }]);
+    const r = await runTurn({ subaccount: { ...sub, voice_model: 'claude-haiku-5-5' }, messages: [], callerText: 'hello', onSaveLead: async () => {}, client });
+    assert.equal(client.calls[0].model, 'claude-haiku-5-5');
+    assert.equal(r.timing.model, 'claude-haiku-5-5');
+});
