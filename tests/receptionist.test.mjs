@@ -221,7 +221,7 @@ test('phone turns run without thinking and with a cached system prompt; web keep
     const [phone, web] = client.calls;
     assert.deepEqual(phone.thinking, { type: 'disabled' });
     assert.equal(web.thinking, undefined);
-    assert.deepEqual(phone.system[0].cache_control, { type: 'ephemeral' });
+    assert.deepEqual(phone.system[0].cache_control, { type: 'ephemeral', ttl: '1h' });
     assert.equal(r.timing.cached, 4000);
 });
 
@@ -307,4 +307,32 @@ test('phone save_lead tells the model to ask its next question in the same messa
     assert.match(phone.description, /same message as your next question/);
     assert.match(phone.description, /end_call/);
     assert.doesNotMatch(web.description, /end_call/);
+});
+
+test('phone requests cache for 1 hour; web keeps the 5-minute cache', async () => {
+    const client = fakeClient([{ stop_reason: 'end_turn', content: [{ type: 'text', text: 'Hi' }] }, { stop_reason: 'end_turn', content: [{ type: 'text', text: 'Hi' }] }]);
+    await runTurn({ subaccount: sub, messages: [], callerText: 'Hello', onSaveLead: async () => {}, client });
+    await runTurn({ subaccount: sub, messages: [], callerText: 'Hello', onSaveLead: async () => {}, client, channel: 'web' });
+    const [phone, web] = client.calls;
+    assert.deepEqual(phone.system[0].cache_control, { type: 'ephemeral', ttl: '1h' });
+    assert.deepEqual(phone.cache_control, { type: 'ephemeral', ttl: '1h' });
+    assert.deepEqual(web.system[0].cache_control, { type: 'ephemeral' });
+});
+
+test('the cache warm-up matches a real phone turn up to the cached system prompt, and asks for no reply', async () => {
+    const { warmRequest, warmPhoneCache } = await import('../lib/receptionist.js');
+    const s = { ...sub, voice_model: 'claude-haiku-5-5' };
+    const client = fakeClient([{ stop_reason: 'end_turn', content: [{ type: 'text', text: 'Hi' }] }]);
+    await runTurn({ subaccount: s, messages: [], callerText: 'Hello', onSaveLead: async () => {}, client });
+    const real = client.calls[0];
+    const warm = warmRequest(s);
+    assert.equal(warm.max_tokens, 0);
+    assert.equal(warm.model, real.model);
+    assert.deepEqual(warm.thinking, real.thinking);
+    assert.deepEqual(warm.output_config, real.output_config);
+    assert.deepEqual(warm.tools, real.tools);
+    assert.deepEqual(warm.system, real.system);
+    assert.equal(warm.cache_control, undefined, 'the placeholder message is not cached');
+    const warmClient = fakeClient([{ stop_reason: 'max_tokens', content: [], usage: { cache_read_input_tokens: 6000, cache_creation_input_tokens: 0 } }]);
+    assert.deepEqual(await warmPhoneCache(s, warmClient), { written: 0, read: 6000 });
 });
