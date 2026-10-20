@@ -38,3 +38,10 @@ test('leadAlertText reads well for a website lead', () => {
     assert.equal(t, 'New lead (website form): Jo Doe\nPhone: (330) 555-1234\nAddress: 1 Elm St\nJob: New Gutters\nNotes: Back of house');
     assert.equal(leadAlertText({ firstName: 'Lead', source: 'Referral from Bob' }), 'New lead (Referral from Bob): No name');
 });
+
+test('automationText sends the body live, and marks test texts with the lead', async () => {
+    const { automationText } = await import('../lib/crm.js');
+    assert.equal(automationText({ body: ' Hi Kurt ', test: false }), 'Hi Kurt');
+    assert.equal(automationText({ body: 'Hi Kurt', test: true, contactName: 'Kurt Matie', to: '+13308442536' }), 'TEST (would go to Kurt Matie +13308442536): Hi Kurt');
+    assert.equal(automationText({ body: 'Hi', test: true }), 'TEST (would go to lead): Hi');
+});
