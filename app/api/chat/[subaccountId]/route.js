@@ -4,6 +4,7 @@ import { bookingContext } from 'lib/booking';
 import { upsertLead } from 'lib/leads';
 import { createAdminClient } from 'lib/supabase/admin';
 import { finalizeCall } from 'lib/voice';
+import { LIMITS, businessChatsLastHour, createLimiter, visitorIp } from 'lib/chatLimits';
 
 export const maxDuration = 26;
 
@@ -14,6 +15,9 @@ const CORS = {
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type'
 };
+
+const hit = createLimiter();
+const BUSY = 'Sorry, chat is busy right now. Please call or try again later.';
 
 const json = (body, status = 200) => Response.json(body, { status, headers: CORS });
 
@@ -59,12 +63,21 @@ export async function POST(request, { params }) {
     if (!message) return json({ error: 'Message is required.' }, 400);
     if (message.length > MAX_MESSAGE) return json({ error: 'Message is too long.' }, 400);
 
+    const ip = visitorIp(request.headers);
+    if (!hit(`msg:${ip}`, LIMITS.ipMessagesPer10Min, 10 * 60 * 1000)) return json({ error: BUSY }, 429);
+
     let chat;
     if (body.sessionId) {
         const { data } = await db.from('calls').select('*').eq('id', body.sessionId).eq('subaccount_id', sub.id).eq('channel', 'web').maybeSingle();
         if (!data || !tokenMatches(String(body.token || ''), data.chat_token || '')) return json({ error: 'Session not found.' }, 404);
         chat = data;
     } else {
+        if (!hit(`new:${ip}`, LIMITS.ipNewChatsPerHour, 60 * 60 * 1000)) return json({ error: BUSY }, 429);
+        try {
+            if ((await businessChatsLastHour(db, sub.id)) >= LIMITS.businessNewChatsPerHour) return json({ error: BUSY }, 429);
+        } catch (err) {
+            console.error('chat limit check failed', err);
+        }
         const { data, error } = await db
             .from('calls')
             .insert({

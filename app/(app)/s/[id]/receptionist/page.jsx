@@ -14,7 +14,8 @@ const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export default async function ReceptionistPage({ params }) {
     const { id } = await params;
-    const { subaccount: s } = await requireSubaccount(id);
+    const { subaccount: s, profile } = await requireSubaccount(id);
+    const isAgency = profile?.role === 'agency_admin';
     const serviceEmail = process.env.GOOGLE_PRIVATE_KEY ? process.env.GOOGLE_CLIENT_EMAIL : null;
     const bookDays = String(s.booking_days ?? '1,2,3,4,5').split(',').filter((d) => /^[0-6]$/.test(d.trim())).map(Number);
     const base = (process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '');
@@ -94,8 +95,10 @@ export default async function ReceptionistPage({ params }) {
                         <label className="label" htmlFor="calendar_id">
                             Calendar ID
                         </label>
-                        <input id="calendar_id" name="calendar_id" defaultValue={s.calendar_id || ''} placeholder="you@gmail.com" className="field" />
-                        <p className="mt-1 text-xs text-slate-500">For your main Gmail calendar this is your Gmail address. Other calendars show it under “Integrate calendar”.</p>
+                        <input id="calendar_id" name="calendar_id" defaultValue={s.calendar_id || ''} placeholder="you@gmail.com" className="field" disabled={!isAgency} />
+                        <p className="mt-1 text-xs text-slate-500">
+                            {isAgency ? 'For your main Gmail calendar this is your Gmail address. Other calendars show it under “Integrate calendar”.' : 'Ask your agency to change which calendar is connected.'}
+                        </p>
                     </div>
                     <fieldset>
                         <legend className="label">Bookable days</legend>
