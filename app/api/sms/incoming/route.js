@@ -2,6 +2,7 @@ import twilio from 'twilio';
 import { createAdminClient } from 'lib/supabase/admin';
 import { findOrCreateContact, forwardText, isMissingTable, mediaUrls } from 'lib/sms';
 import { forbidden, readTwilioRequest } from 'lib/voice';
+import { pushInboxEvent, smsInboxEvent } from 'lib/crm';
 
 const EMPTY = () => new Response('<Response/>', { headers: { 'Content-Type': 'text/xml' } });
 
@@ -38,6 +39,11 @@ export async function POST(request) {
     if (error && !isMissingTable(error)) console.error('sms save failed', error);
     // Twilio retried a message we already have: it was forwarded the first time.
     if (!error && !saved?.length) return EMPTY();
+
+    // Copy it into the CRM Inbox.
+    if (!fromOwner) {
+        await pushInboxEvent(smsInboxEvent(subaccount, { direction: 'in', phone, body, media, sid: params.MessageSid, name: contact?.name }));
+    }
 
     // Owner's own texts to the business line are not forwarded back to them.
     if (!fromOwner && subaccount.notify_phone && process.env.TWILIO_ACCOUNT_SID) {

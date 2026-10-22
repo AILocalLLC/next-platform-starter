@@ -1,6 +1,7 @@
 import twilio from 'twilio';
 import { createAdminClient } from 'lib/supabase/admin';
 import { forbidden, readTwilioRequest, say, twimlResponse } from 'lib/voice';
+import { pushInboxEvent, voicemailInboxEvent } from 'lib/crm';
 
 // Voicemail fallback (used when the AI can't answer). Twilio calls this twice:
 // ?done=1 when the recording ends (we say goodbye), and again with the transcription text.
@@ -31,6 +32,7 @@ export async function POST(request) {
         .eq('id', call.id);
 
     const subaccount = call.subaccounts;
+    if (subaccount) await pushInboxEvent(voicemailInboxEvent(subaccount, call, text));
     if (subaccount?.notify_phone && subaccount.twilio_number && process.env.TWILIO_ACCOUNT_SID) {
         try {
             await twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN).messages.create({

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { crmLeadFromContact, keyMatches, leadAlertText, pushLeadToCrm } from '../lib/crm.js';
+import { callInboxEvent, crmLeadFromContact, keyMatches, leadAlertText, pushInboxEvent, pushLeadToCrm, smsInboxEvent, voicemailInboxEvent } from '../lib/crm.js';
 
 test('keyMatches only accepts the exact key', () => {
     assert.equal(keyMatches('abc', 'abc'), true);
@@ -44,4 +44,61 @@ test('automationText sends the body live, and marks test texts with the lead', a
     assert.equal(automationText({ body: ' Hi Kurt ', test: false }), 'Hi Kurt');
     assert.equal(automationText({ body: 'Hi Kurt', test: true, contactName: 'Kurt Matie', to: '+13308442536' }), 'TEST (would go to Kurt Matie +13308442536): Hi Kurt');
     assert.equal(automationText({ body: 'Hi', test: true }), 'TEST (would go to lead): Hi');
+});
+
+
+test('inbox events carry the business and the customer', () => {
+    const sub = { crm_funnel_slug: 'ngnm-website-quote', twilio_number: '+13305550000' };
+    assert.deepEqual(smsInboxEvent(sub, { direction: 'in', phone: '+13305550101', body: 'Hi', sid: 'SM1', name: 'Kurt' }), {
+        type: 'sms', direction: 'in', phone: '+13305550101', name: 'Kurt', body: 'Hi', media: [], externalId: 'SM1', slug: 'ngnm-website-quote', business: '+13305550000'
+    });
+    const call = callInboxEvent(sub, { id: 'c1', channel: 'phone', from_number: '+13305550102', duration_seconds: 125, started_at: '2026-10-22T15:00:00Z' }, null, 'Wants gutters.');
+    assert.equal(call.type, 'call');
+    assert.equal(call.phone, '+13305550102');
+    assert.equal(call.externalId, 'call:c1');
+    assert.match(call.body, /^Call answered by the AI receptionist \(2 min\)\. Wants gutters\.$/);
+    const chat = callInboxEvent(sub, { id: 'c2', channel: 'web' }, { name: 'Ann', email: 'a@b.co' }, 'Asked about pricing.');
+    assert.equal(chat.type, 'chat');
+    assert.equal(chat.phone, undefined);
+    assert.equal(chat.email, 'a@b.co');
+    assert.equal(voicemailInboxEvent(sub, { id: 'c3', from_number: '+1330' }, 'Call me').externalId, 'vm:c3');
+});
+
+test('pushInboxEvent posts with the key and never throws', async () => {
+    const env = { LEAD_ALERT_KEY: 'k'.repeat(40), CRM_API_URL: 'https://crm.test/' };
+    let call;
+    const ev = { type: 'sms', direction: 'in', phone: '+1', body: 'x', slug: 's' };
+    assert.equal(await pushInboxEvent(ev, { env, fetchImpl: async (url, opts) => { call = { url, opts }; return { ok: true }; } }), 'sent');
+    assert.equal(call.url, 'https://crm.test/api/v1/inbox/events');
+    assert.equal(call.opts.headers['x-lead-alert-key'], env.LEAD_ALERT_KEY);
+    assert.equal(await pushInboxEvent(ev, { env, fetchImpl: async () => { throw new Error('down'); } }), 'error');
+    assert.equal(await pushInboxEvent(ev, { env, fetchImpl: async () => ({ ok: false, status: 500 }) }), 'http-500');
+    assert.equal(await pushInboxEvent(ev, { env: {} }), 'not-configured');
+    assert.equal(await pushInboxEvent({ ...ev, slug: undefined }, { env }), 'no-business');
+    assert.equal(await pushInboxEvent({ ...ev, phone: undefined }, { env }), 'no-contact');
+});
+
+test('AI bookings are sent to the CRM calendar and never throw', async () => {
+    const { appointmentEvent, pushAppointmentToCrm } = await import('../lib/crm.js');
+    const sub = { crm_funnel_slug: 'ngnm-website-quote', twilio_number: '+13305550000' };
+    const ev = appointmentEvent(sub, { eventId: 'g1', start: '2026-10-27T13:00:00.000Z', end: '2026-10-27T14:00:00.000Z' }, { name: 'Kurt Lead', service: 'Gutter estimate', address: '12 Main', reason: 'Back side' }, '+13305550101');
+    assert.equal(ev.title, 'Gutter estimate');
+    assert.equal(ev.notes, 'Back side\nBooked by the AI receptionist.');
+    const env = { LEAD_ALERT_KEY: 'k'.repeat(40), CRM_API_URL: 'https://crm.test' };
+    let url;
+    assert.equal(await pushAppointmentToCrm(ev, { env, fetchImpl: async (u) => { url = u; return { ok: true }; } }), 'sent');
+    assert.equal(url, 'https://crm.test/api/v1/appointments/events');
+    assert.equal(await pushAppointmentToCrm(ev, { env, fetchImpl: async () => { throw new Error('x'); } }), 'error');
+    assert.equal(await pushAppointmentToCrm({ ...ev, eventId: undefined }, { env }), 'incomplete');
+});
+
+test('appointment rows saved during a call become CRM calendar events', async () => {
+    const { appointmentEventFromRow } = await import('../lib/crm.js');
+    const ev = appointmentEventFromRow(
+        { crm_funnel_slug: 's', twilio_number: '+13305550000' },
+        { google_event_id: 'g2', start_at: '2026-10-27T13:00:00Z', end_at: '2026-10-27T14:00:00Z' },
+        { name: 'Kurt Lead', phone: '+13305550101', notes: 'Service: Gutter guards\nAddress: 12 Main St' },
+        'Wants a quote.'
+    );
+    assert.deepEqual([ev.eventId, ev.title, ev.address, ev.phone, ev.notes], ['g2', 'Gutter guards', '12 Main St', '+13305550101', 'Wants a quote.\nBooked by the AI receptionist.']);
 });
