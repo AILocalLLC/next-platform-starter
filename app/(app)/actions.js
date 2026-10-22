@@ -7,7 +7,7 @@ import { requireAdmin, requireSubaccount, requireUser } from 'lib/auth';
 import { createAdminClient } from 'lib/supabase/admin';
 import { csvToContacts } from 'lib/csv';
 import { calendarConfigured, createCalendar } from 'lib/gcal';
-import { toE164 } from 'lib/phone';
+import { toE164, toUsE164, isOwnNumber } from 'lib/phone';
 import { isMissingTable } from 'lib/sms';
 
 const str = (fd, k) => String(fd.get(k) ?? '').trim();
@@ -53,7 +53,8 @@ export async function createSubaccount(prev, fd) {
 }
 
 export async function updateSubaccount(id, prev, fd) {
-    const { supabase } = await requireSubaccount(id);
+    const { supabase, profile } = await requireSubaccount(id);
+    const isAgency = profile?.role === 'agency_admin';
     const patch = {};
     for (const k of ['name', 'website', 'timezone', 'greeting', 'business_info', 'instructions', 'notify_email']) {
         if (fd.has(k)) patch[k] = str(fd, k);
@@ -61,13 +62,18 @@ export async function updateSubaccount(id, prev, fd) {
     for (const k of ['business_phone', 'notify_phone', 'transfer_number']) {
         if (fd.has(k)) patch[k] = toE164(opt(fd, k));
     }
+    // Owner alerts sent to one of our own numbers would loop back into the app.
+    if (patch.notify_phone && (await isOwnNumber(createAdminClient(), patch.notify_phone))) {
+        return { error: "The alert phone can't be one of the AI receptionist's numbers. Use your cell." };
+    }
     if (fd.has('receptionist_form')) patch.receptionist_enabled = fd.get('receptionist_enabled') === 'on';
     if (fd.has('chat_form')) {
         patch.chat_enabled = fd.get('chat_enabled') === 'on';
         patch.chat_greeting = str(fd, 'chat_greeting') || 'Hi! How can I help you today?';
     }
     if (fd.has('calendar_form')) {
-        patch.calendar_id = opt(fd, 'calendar_id');
+        // Only the agency picks the calendar: the booking service can see every client's calendars.
+        if (isAgency) patch.calendar_id = opt(fd, 'calendar_id');
         patch.appointment_minutes = Math.min(480, Math.max(15, Number(str(fd, 'appointment_minutes')) || 60));
         patch.booking_days = fd.getAll('booking_days').map(String).filter((d) => /^[0-6]$/.test(d)).join(',');
         const hm = (k, def) => (/^\d{2}:\d{2}$/.test(str(fd, k)) ? str(fd, k) : def);
@@ -144,10 +150,10 @@ export async function testCalendar(id) {
 export async function sendText(subaccountId, phone, prev, fd) {
     const { supabase, user, subaccount } = await requireSubaccount(subaccountId);
     const body = str(fd, 'body');
-    const to = toE164(phone || str(fd, 'phone'));
+    const to = toUsE164(phone || str(fd, 'phone'));
     if (!body) return { error: 'Type a message.' };
     if (body.length > 1600) return { error: 'Keep texts under 1,600 characters.' };
-    if (!to) return { error: 'No phone number.' };
+    if (!to) return { error: 'Texts can only go to US phone numbers.' };
     if (!subaccount.twilio_number) return { error: 'Connect a phone number in Settings first.' };
     let sent;
     try {

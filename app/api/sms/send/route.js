@@ -1,7 +1,7 @@
 import twilio from 'twilio';
 import { createAdminClient } from 'lib/supabase/admin';
 import { automationText, keyMatches } from 'lib/crm';
-import { toE164 } from 'lib/phone';
+import { toE164, toUsE164 } from 'lib/phone';
 
 // The CRM's automations call this to send one text from the business's number.
 // test: true sends it to the owner's phone instead of the lead.
@@ -34,7 +34,7 @@ export async function POST(request) {
     if (!subaccount) return Response.json({ status: 'no-business' }, { status: 404 });
     if (!subaccount.twilio_number || !process.env.TWILIO_ACCOUNT_SID) return Response.json({ status: 'no-number' }, { status: 409 });
 
-    const to = msg.test ? subaccount.notify_phone : toE164(String(msg.to));
+    const to = msg.test ? subaccount.notify_phone : toUsE164(String(msg.to));
     if (!to) return Response.json({ status: msg.test ? 'no-owner-phone' : 'bad-number' }, { status: 409 });
 
     try {
