@@ -9,6 +9,7 @@ import { csvToContacts } from 'lib/csv';
 import { calendarConfigured, createCalendar } from 'lib/gcal';
 import { toE164, toUsE164, isOwnNumber } from 'lib/phone';
 import { isMissingTable } from 'lib/sms';
+import { pushInboxEvent, smsInboxEvent } from 'lib/crm';
 
 const str = (fd, k) => String(fd.get(k) ?? '').trim();
 const opt = (fd, k) => str(fd, k) || null;
@@ -165,6 +166,7 @@ export async function sendText(subaccountId, phone, prev, fd) {
     const { error } = await supabase
         .from('messages')
         .insert({ subaccount_id: subaccountId, contact_id: contact?.id ?? null, direction: 'out', phone: to, body, twilio_sid: sent.sid, status: sent.status, sent_by: user.id });
+    await pushInboxEvent(smsInboxEvent(subaccount, { direction: 'out', phone: to, body, sid: sent.sid }));
     if (error && !isMissingTable(error)) return { error: `Sent, but not saved: ${error.message}` };
     revalidatePath(`/s/${subaccountId}/messages`);
     return { message: 'Sent.' };
