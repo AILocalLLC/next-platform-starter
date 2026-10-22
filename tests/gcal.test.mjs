@@ -113,3 +113,41 @@ test('no bookable days checked means no slots, not Sunday', () => {
     assert.deepEqual(bookingSettings({ booking_days: '' }).days, []);
     assert.deepEqual(bookingSettings({ booking_days: '1,6' }).days, [1, 6]);
 });
+
+test('calendar event helpers call Google with the right methods', async () => {
+    const { createCalendar } = await import('../lib/gcal.js');
+    const calls = [];
+    const fetchImpl = async (url, opts = {}) => {
+        if (url.includes('oauth2')) return { ok: true, json: async () => ({ access_token: 't', expires_in: 3600 }) };
+        calls.push({ url, method: opts.method, body: opts.body ? JSON.parse(opts.body) : undefined });
+        if (opts.method === 'DELETE') return { ok: true, status: 204 };
+        if (opts.method === 'GET') return { ok: true, json: async () => ({ items: [
+            { id: 'a', status: 'confirmed', start: { dateTime: '2026-10-27T13:00:00Z' }, end: { dateTime: '2026-10-27T14:00:00Z' } },
+            { id: 'b', status: 'confirmed', transparency: 'transparent', start: { dateTime: '2026-10-27T15:00:00Z' }, end: { dateTime: '2026-10-27T16:00:00Z' } },
+            { id: 'c', status: 'confirmed', start: { date: '2026-10-28' }, end: { date: '2026-10-29' } }
+        ] }) };
+        return { ok: true, json: async () => ({ id: 'ev9' }) };
+    };
+    const prev = { email: process.env.GOOGLE_CLIENT_EMAIL, key: process.env.GOOGLE_PRIVATE_KEY };
+    const { generateKeyPairSync } = await import('node:crypto');
+    process.env.GOOGLE_CLIENT_EMAIL = 'svc@x.iam.gserviceaccount.com';
+    process.env.GOOGLE_PRIVATE_KEY = generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey.export({ type: 'pkcs8', format: 'pem' });
+    try {
+        const cal = createCalendar({ calendar_id: 'owner@gmail.com', timezone: 'America/New_York' }, fetchImpl);
+        const fields = { summary: 'Estimate: Kurt', description: 'd', location: '12 Main', start: '2026-10-27T13:00:00Z', end: '2026-10-27T14:00:00Z' };
+        assert.equal(await cal.createEvent(fields), 'ev9');
+        await cal.updateEvent('ev9', fields);
+        await cal.deleteEvent('ev9');
+        const busy = await cal.busyEvents('2026-10-27T00:00:00Z', '2026-10-30T00:00:00Z');
+        assert.deepEqual(calls.map((c) => c.method), ['POST', 'PATCH', 'DELETE', 'GET']);
+        assert.match(calls[0].url, /\/calendars\/owner%40gmail\.com\/events$/);
+        assert.equal(calls[0].body.start.dateTime, '2026-10-27T13:00:00.000Z');
+        assert.match(calls[1].url, /\/events\/ev9$/);
+        assert.deepEqual(busy.map((b) => [b.id, b.allDay]), [['a', false], ['c', true]]);
+    } finally {
+        process.env.GOOGLE_CLIENT_EMAIL = prev.email;
+        process.env.GOOGLE_PRIVATE_KEY = prev.key;
+        if (prev.email === undefined) delete process.env.GOOGLE_CLIENT_EMAIL;
+        if (prev.key === undefined) delete process.env.GOOGLE_PRIVATE_KEY;
+    }
+});

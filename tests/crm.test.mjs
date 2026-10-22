@@ -77,3 +77,28 @@ test('pushInboxEvent posts with the key and never throws', async () => {
     assert.equal(await pushInboxEvent({ ...ev, slug: undefined }, { env }), 'no-business');
     assert.equal(await pushInboxEvent({ ...ev, phone: undefined }, { env }), 'no-contact');
 });
+
+test('AI bookings are sent to the CRM calendar and never throw', async () => {
+    const { appointmentEvent, pushAppointmentToCrm } = await import('../lib/crm.js');
+    const sub = { crm_funnel_slug: 'ngnm-website-quote', twilio_number: '+13305550000' };
+    const ev = appointmentEvent(sub, { eventId: 'g1', start: '2026-10-27T13:00:00.000Z', end: '2026-10-27T14:00:00.000Z' }, { name: 'Kurt Lead', service: 'Gutter estimate', address: '12 Main', reason: 'Back side' }, '+13305550101');
+    assert.equal(ev.title, 'Gutter estimate');
+    assert.equal(ev.notes, 'Back side\nBooked by the AI receptionist.');
+    const env = { LEAD_ALERT_KEY: 'k'.repeat(40), CRM_API_URL: 'https://crm.test' };
+    let url;
+    assert.equal(await pushAppointmentToCrm(ev, { env, fetchImpl: async (u) => { url = u; return { ok: true }; } }), 'sent');
+    assert.equal(url, 'https://crm.test/api/v1/appointments/events');
+    assert.equal(await pushAppointmentToCrm(ev, { env, fetchImpl: async () => { throw new Error('x'); } }), 'error');
+    assert.equal(await pushAppointmentToCrm({ ...ev, eventId: undefined }, { env }), 'incomplete');
+});
+
+test('appointment rows saved during a call become CRM calendar events', async () => {
+    const { appointmentEventFromRow } = await import('../lib/crm.js');
+    const ev = appointmentEventFromRow(
+        { crm_funnel_slug: 's', twilio_number: '+13305550000' },
+        { google_event_id: 'g2', start_at: '2026-10-27T13:00:00Z', end_at: '2026-10-27T14:00:00Z' },
+        { name: 'Kurt Lead', phone: '+13305550101', notes: 'Service: Gutter guards\nAddress: 12 Main St' },
+        'Wants a quote.'
+    );
+    assert.deepEqual([ev.eventId, ev.title, ev.address, ev.phone, ev.notes], ['g2', 'Gutter guards', '12 Main St', '+13305550101', 'Wants a quote.\nBooked by the AI receptionist.']);
+});
