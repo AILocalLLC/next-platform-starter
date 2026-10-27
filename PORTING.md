@@ -1,5 +1,10 @@
 # Moving a number from GHL (LC Phone) to Twilio
 
+**Easiest way (use this first):** ask GHL Support to *move* the LC Phone number into our own Twilio account
+("Moving Phone Numbers across accounts (LC Phone -> Twilio)"). Give them our Twilio Account SID (AC..., Twilio Console
+home), the number(s) and sub-account name(s). No CSR, PIN, LOA or port form. Keep the number active in GHL until they
+confirm the move and it has been tested. The carrier port below is the fallback.
+
 First number: **(330) 919-6167**, New Gutters Near Me. Later: (330) 476-7348, AI Local, once that sub-account is built in the app.
 GHL keeps the number working until the port completes. The app must be fully tested before the port date.
 
