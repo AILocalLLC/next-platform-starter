@@ -102,3 +102,35 @@ test('appointment rows saved during a call become CRM calendar events', async ()
     );
     assert.deepEqual([ev.eventId, ev.title, ev.address, ev.phone, ev.notes], ['g2', 'Gutter guards', '12 Main St', '+13305550101', 'Wants a quote.\nBooked by the AI receptionist.']);
 });
+
+test('booking calendar lookup: the caller\'s assigned team member, or null on anything odd', async () => {
+    const { lookupBookingCalendar } = await import('../lib/crm.js');
+    const env = { LEAD_ALERT_KEY: 'k'.repeat(40), CRM_API_URL: 'https://crm.test/' };
+    let sent;
+    const reply = (body, ok = true) => async (u, init) => { sent = { u, init }; return { ok, json: async () => body }; };
+    const who = await lookupBookingCalendar({ slug: 's', phone: '+13305550101' }, { env, fetchImpl: reply({ calendarId: 'rep@x.com', assignedToId: 'u1', name: 'Rep' }) });
+    assert.deepEqual(who, { calendarId: 'rep@x.com', assignedToId: 'u1', name: 'Rep' });
+    assert.equal(sent.u, 'https://crm.test/api/v1/platform/booking-calendar');
+    assert.equal(sent.init.headers['x-lead-alert-key'], env.LEAD_ALERT_KEY);
+    assert.deepEqual(JSON.parse(sent.init.body), { slug: 's', phone: '+13305550101' });
+    assert.equal(await lookupBookingCalendar({ slug: 's', phone: '1' }, { env, fetchImpl: reply({}) }), null, 'not assigned');
+    assert.equal(await lookupBookingCalendar({ slug: 's', phone: '1' }, { env, fetchImpl: reply({ calendarId: 'not an email', assignedToId: 'u1' }) }), null, 'bad calendar');
+    assert.equal(await lookupBookingCalendar({ slug: 's', phone: '1' }, { env, fetchImpl: reply({}, false) }), null, 'CRM error');
+    assert.equal(await lookupBookingCalendar({ slug: 's', phone: '1' }, { env, fetchImpl: async () => { throw new Error('down'); } }), null, 'CRM down');
+    let called = false;
+    assert.equal(await lookupBookingCalendar({ slug: 's' }, { env, fetchImpl: async () => { called = true; } }), null, 'no phone/email');
+    assert.equal(await lookupBookingCalendar({ phone: '1' }, { env, fetchImpl: async () => { called = true; } }), null, 'no business');
+    assert.equal(await lookupBookingCalendar({ slug: 's', phone: '1' }, { env: {}, fetchImpl: async () => { called = true; } }), null, 'no key');
+    assert.equal(called, false);
+});
+
+test('bookings on a team member calendar tell the CRM whose calendar it is', async () => {
+    const { appointmentEvent, appointmentEventFromRow } = await import('../lib/crm.js');
+    const sub = { crm_funnel_slug: 's', twilio_number: '+13305550000' };
+    const ev = appointmentEvent(sub, { eventId: 'g1', start: 'a', end: 'b', calendarId: 'rep@x.com', assignedToId: 'u1' }, { name: 'K' }, '+1');
+    assert.deepEqual([ev.calendarId, ev.assignedToId], ['rep@x.com', 'u1']);
+    const plain = appointmentEvent(sub, { eventId: 'g1', start: 'a', end: 'b' }, { name: 'K' }, '+1');
+    assert.deepEqual([plain.calendarId, plain.assignedToId], [undefined, undefined]);
+    const row = appointmentEventFromRow(sub, { google_event_id: 'g3', start_at: 'a', end_at: 'b', google_calendar_id: 'rep@x.com', crm_assignee_id: 'u1' }, { name: 'K', phone: '+1' }, '');
+    assert.deepEqual([row.calendarId, row.assignedToId], ['rep@x.com', 'u1']);
+});
