@@ -1,5 +1,6 @@
 import twilio from 'twilio';
 import { createAdminClient } from 'lib/supabase/admin';
+import { relayTwiml, usesRelay } from 'lib/relay';
 import { forbidden, gather, readTwilioRequest, twimlResponse, VOICE } from 'lib/voice';
 
 // Twilio voice webhook for every subaccount number (set automatically by "Connect number").
@@ -41,6 +42,7 @@ export async function POST(request) {
         return twimlResponse(twiml);
     }
 
-    gather(twiml, call.id, subaccount.greeting);
+    if (usesRelay(subaccount)) relayTwiml(twiml, { callId: call.id, greeting: subaccount.greeting });
+    else gather(twiml, call.id, subaccount.greeting);
     return twimlResponse(twiml);
 }
