@@ -1,6 +1,5 @@
 import { createAdminClient } from 'lib/supabase/admin';
-import { relaySigOk } from 'lib/relay';
-import { speakable } from 'lib/speech';
+import { relaySigOk, relaySpeakable } from 'lib/relay';
 import { voiceTurn } from 'lib/voiceTurn';
 
 export const maxDuration = 26;
@@ -30,5 +29,5 @@ export async function POST(request) {
         silent: Math.min(Number(body.silent) || 0, 5),
         loadMs: Date.now() - t0
     });
-    return Response.json({ reply: speakable(reply), action });
+    return Response.json({ reply: relaySpeakable(reply), action });
 }
