@@ -1,5 +1,6 @@
 import twilio from 'twilio';
 import { createAdminClient } from 'lib/supabase/admin';
+import { RELAY_SAY_VOICE, relaySpeakable } from 'lib/relay';
 import { forbidden, gather, readTwilioRequest, twimlForAction, twimlResponse } from 'lib/voice';
 
 const HANDOFF = ['hangup', 'transfer', 'voicemail'];
@@ -26,9 +27,9 @@ export async function POST(request) {
     }
     const action = HANDOFF.includes(handoff.action) ? handoff.action : null;
     if (action === 'transfer' && !call.subaccounts?.transfer_number) {
-        twimlForAction(twiml, call, String(handoff.reply || ''), 'hangup');
+        twimlForAction(twiml, call, relaySpeakable(String(handoff.reply || '')), 'hangup', RELAY_SAY_VOICE);
     } else if (action) {
-        twimlForAction(twiml, call, String(handoff.reply || '').slice(0, 1000), action);
+        twimlForAction(twiml, call, relaySpeakable(String(handoff.reply || '').slice(0, 1000)), action, RELAY_SAY_VOICE);
     } else {
         console.error('relay session ended without hand-off', call.id, params.SessionStatus || '', params.ErrorCode || '', params.ErrorMessage || '');
         gather(twiml, call.id, "Sorry, I missed that. Could you say it again?");
