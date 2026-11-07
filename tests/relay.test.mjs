@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import twilio from 'twilio';
-import { RELAY_SAY_VOICE, relaySig, relaySigOk, relaySpeakable, relayTwiml, usesRelay } from '../lib/relay.js';
+import { RELAY_SAY_VOICE, relaySig, relaySigOk, relaySpeakable, relayTwiml, relayVoiceFor, usesRelay } from '../lib/relay.js';
 import { voiceTurn } from '../lib/voiceTurn.js';
 
 process.env.TWILIO_AUTH_TOKEN = 't'.repeat(32);
@@ -22,13 +22,15 @@ test('only businesses set to relay use it', () => {
     assert.equal(usesRelay({}), false);
 });
 
-test('TwiML: Google Aoede voice, greeting, signed bridge URL, hand-off to relay-done', () => {
+test('TwiML: same voice as <Say>, greeting, signed bridge URL, hand-off to relay-done', () => {
     const twiml = new twilio.twiml.VoiceResponse();
     relayTwiml(twiml, { callId: 'call-1', greeting: 'Hi, A.I. Local here, call 330-555-1212.' });
     const xml = twiml.toString();
     assert.match(xml, /<Connect action="\/api\/voice\/relay-done\?call=call-1" method="POST">/);
-    assert.match(xml, /ttsProvider="Google"/);
-    assert.match(xml, /voice="en-US-Chirp3-HD-Aoede"/);
+    // No TWILIO_VOICE in tests: the default Polly.Joanna-Neural.
+    assert.match(xml, /ttsProvider="Amazon"/);
+    assert.match(xml, /voice="Joanna-Neural"/);
+    assert.match(xml, /partialPrompts="true"/);
     assert.match(xml, /transcriptionProvider="Deepgram" speechModel="flux-general-en"/);
     assert.doesNotMatch(xml, /ignorebackchannel|backgroundnoisereduction|speechtimeout/, 'attributes Twilio rejects');
     assert.match(xml, new RegExp(`url="wss://api-596595914790\\.us-central1\\.run\\.app/api/v1/voice-relay\\?call=call-1&amp;sig=${relaySig('call-1')}"`));
@@ -79,5 +81,7 @@ test('AI failure never drops the caller: voicemail, or transfer when there is a 
 test('"A.I." is read as one word (no full-stop pause); hand-off lines use the same voice', () => {
     assert.equal(relaySpeakable("You've reached A.I. Local, where we use AI."), "You've reached AI Local, where we use AI.");
     assert.equal(relaySpeakable('Thanks for calling A.I.'), 'Thanks for calling AI');
-    assert.equal(RELAY_SAY_VOICE, 'Google.en-US-Chirp3-HD-Aoede');
+    assert.equal(RELAY_SAY_VOICE, 'Polly.Joanna-Neural');
+    assert.deepEqual(relayVoiceFor('Google.en-US-Chirp3-HD-Leda'), { provider: 'Google', voice: 'en-US-Chirp3-HD-Leda' });
+    assert.deepEqual(relayVoiceFor('Polly.Joanna-Neural'), { provider: 'Amazon', voice: 'Joanna-Neural' });
 });
