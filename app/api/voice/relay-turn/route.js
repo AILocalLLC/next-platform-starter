@@ -21,13 +21,32 @@ export async function POST(request) {
     const { data: call } = await db.from('calls').select('*, subaccounts(*)').eq('id', callId).maybeSingle();
     if (!call || !callSid || call.twilio_call_sid !== callSid) return Response.json({ error: 'forbidden' }, { status: 403 });
 
-    const { reply, action } = await voiceTurn({
+    const args = {
         db,
         call,
         speech: typeof body.text === 'string' ? body.text.slice(0, 2000) : '',
         resume: body.resume === true,
         silent: Math.min(Number(body.silent) || 0, 5),
         loadMs: Date.now() - t0
+    };
+    if (body.stream !== true) {
+        const { reply, action } = await voiceTurn(args);
+        return Response.json({ reply: relaySpeakable(reply), action });
+    }
+    // Streamed: one JSON line per finished sentence ({ text }), then { done, rest, reply, action }.
+    const enc = new TextEncoder();
+    const stream = new ReadableStream({
+        async start(controller) {
+            const send = (obj) => controller.enqueue(enc.encode(`${JSON.stringify(obj)}\n`));
+            try {
+                const { reply, rest, action } = await voiceTurn({ ...args, onText: (sentence) => send({ text: relaySpeakable(sentence) }) });
+                send({ done: true, rest: relaySpeakable(rest), reply: relaySpeakable(reply), action });
+            } catch (err) {
+                console.error('relay-turn stream failed', err);
+                send({ done: true, error: true });
+            }
+            controller.close();
+        }
     });
-    return Response.json({ reply: relaySpeakable(reply), action });
+    return new Response(stream, { headers: { 'Content-Type': 'application/x-ndjson', 'Cache-Control': 'no-cache, no-transform' } });
 }

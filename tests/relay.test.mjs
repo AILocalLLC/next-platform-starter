@@ -85,3 +85,58 @@ test('"A.I." is read as one word (no full-stop pause); hand-off lines use the sa
     assert.deepEqual(relayVoiceFor('Google.en-US-Chirp3-HD-Leda'), { provider: 'Google', voice: 'en-US-Chirp3-HD-Leda' });
     assert.deepEqual(relayVoiceFor('Polly.Joanna-Neural'), { provider: 'Amazon', voice: 'Joanna-Neural' });
 });
+
+// Fake Claude client whose stream() emits the text in small pieces, like the real API.
+function streamingClient(responses) {
+    return {
+        beta: {
+            messages: {
+                create: async () => responses.shift(),
+                stream: () => {
+                    const msg = responses.shift();
+                    const handlers = [];
+                    return {
+                        on: (ev, cb) => ev === 'text' && handlers.push(cb),
+                        finalMessage: async () => {
+                            const text = msg.content.filter((b) => b.type === 'text').map((b) => b.text).join('');
+                            for (let i = 0; i < text.length; i += 7) handlers.forEach((h) => h(text.slice(i, i + 7)));
+                            return msg;
+                        }
+                    };
+                }
+            }
+        }
+    };
+}
+
+test('streaming: each finished sentence is spoken while the reply is written; "let me save" talk stays silent', async () => {
+    const { runTurn } = await import('../lib/receptionist.js');
+    const said = [];
+    const client = streamingClient([
+        { stop_reason: 'end_turn', content: [{ type: 'text', text: 'Sure. You have reached A.I. Local, and the Answer plan is $197 a month. Let me save that for you. Would you like a consultation?' }] }
+    ]);
+    const r = await runTurn({ subaccount: { name: 'AI Local', business_info: 'x', instructions: 'y' }, messages: [], callerText: 'price?', onSaveLead: async () => {}, onText: (s) => said.push(s), client });
+    assert.deepEqual(said, ['Sure.', 'You have reached A.I. Local, and the Answer plan is $197 a month.', 'Would you like a consultation?']);
+    assert.equal(r.reply, said.join(' '));
+});
+
+test('voiceTurn rest: only what was not already streamed; a replacement line is sent whole', async () => {
+    const db = fakeDb();
+    const streamedRun = async ({ onText }) => {
+        onText('Sure.');
+        return { messages: [], reply: 'Sure. The Answer plan is $197 a month.', action: 'continue' };
+    };
+    const a = await voiceTurn({ db, call: callRow(), speech: 'price', run: streamedRun, onText: () => {} });
+    assert.equal(a.rest, 'The Answer plan is $197 a month.');
+    const allStreamed = async ({ onText }) => (onText('Sure.'), onText('Goodbye!'), { messages: [], reply: 'Sure. Goodbye!', action: 'hangup' });
+    assert.equal((await voiceTurn({ db, call: callRow(), speech: 'bye', run: allStreamed, onText: () => {} })).rest, '');
+    const failing = async ({ onText }) => {
+        onText('Sure.');
+        throw new Error('overloaded');
+    };
+    const c = await voiceTurn({ db, call: callRow(), speech: 'hi', run: failing, onText: () => {} });
+    assert.equal(c.action, 'voicemail');
+    assert.match(c.rest, /leave your name/);
+    const plain = await voiceTurn({ db, call: callRow(), speech: 'hi', run: async () => ({ messages: [], reply: 'Hello.', action: 'continue' }) });
+    assert.equal(plain.rest, 'Hello.');
+});
