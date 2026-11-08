@@ -31,6 +31,7 @@ test('TwiML: same voice as <Say>, greeting, signed bridge URL, hand-off to relay
     assert.match(xml, /ttsProvider="Amazon"/);
     assert.match(xml, /voice="Joanna-Neural"/);
     assert.match(xml, /partialPrompts="true"/);
+    assert.doesNotMatch(xml, /interruptSensitivity/, 'default sensitivity, so callers talking over Ari are heard');
     assert.match(xml, /transcriptionProvider="Deepgram" speechModel="flux-general-en"/);
     assert.doesNotMatch(xml, /ignorebackchannel|backgroundnoisereduction|speechtimeout/, 'attributes Twilio rejects');
     assert.match(xml, new RegExp(`url="wss://api-596595914790\\.us-central1\\.run\\.app/api/v1/voice-relay\\?call=call-1&amp;sig=${relaySig('call-1')}"`));
