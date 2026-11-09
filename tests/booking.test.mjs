@@ -22,6 +22,7 @@ function setup({ assignee = null, crmDown = false } = {}) {
         }
         if (url.includes('/calendars/') && url.includes('/events')) {
             seen.events.push(decodeURIComponent(url.split('/calendars/')[1].split('/')[0]));
+            if (body?.summary) (seen.titles ||= []).push(body.summary);
             return json({ id: `evt${seen.events.length}` });
         }
         if (url.endsWith('/api/v1/platform/booking-calendar')) {
@@ -59,6 +60,7 @@ test('phone call from a caller assigned to Rita: Ari checks and books on Rita\'s
     assert.deepEqual(seen.freeBusy, ['rita@gmail.com']);
     const booked = await ctx.onBook({ start: slots[0].start, name: 'Kurt Lead', service: 'Estimate' });
     assert.equal(seen.events.at(-1), 'rita@gmail.com', 'event created on Rita\'s calendar');
+    assert.equal(seen.titles.at(-1), 'NGNM – Estimate: Kurt Lead', 'business name first, so a shared calendar shows whose appointment it is');
     assert.equal(seen.lookups.length, 1, 'looked up once per turn');
     assert.equal(inserted[0].google_calendar_id, 'rita@gmail.com');
     assert.equal(inserted[0].crm_assignee_id, 'u-rita');
