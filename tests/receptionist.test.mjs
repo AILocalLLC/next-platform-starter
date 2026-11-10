@@ -337,3 +337,9 @@ test('the cache warm-up matches a real phone turn up to the cached system prompt
     const warmClient = fakeClient([{ stop_reason: 'max_tokens', content: [], usage: { cache_read_input_tokens: 6000, cache_creation_input_tokens: 0 } }]);
     assert.deepEqual(await warmPhoneCache(s, warmClient), { written: 0, read: 6000 });
 });
+
+test('shared noisy-call rule is in every phone prompt and not in web chat', () => {
+    assert.match(buildSystemPrompt(sub), /background noise/);
+    assert.match(buildSystemPrompt(sub), /step somewhere quieter/);
+    assert.doesNotMatch(buildSystemPrompt(sub, 'web'), /background noise/);
+});
