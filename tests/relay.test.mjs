@@ -141,3 +141,18 @@ test('voiceTurn rest: only what was not already streamed; a replacement line is 
     const plain = await voiceTurn({ db, call: callRow(), speech: 'hi', run: async () => ({ messages: [], reply: 'Hello.', action: 'continue' }) });
     assert.equal(plain.rest, 'Hello.');
 });
+
+test('caller ID is given as a 10-digit number (no "+1" for Ari to read out); hang-ups always end on a goodbye', async () => {
+    const { callStartMessage } = await import('../lib/receptionist.js');
+    assert.match(callStartMessage({ from: '+18775494401', startedAt: Date.now(), timezone: 'America/New_York' }), /Caller ID: 877-549-4401\.\]$/);
+    assert.match(callStartMessage({ from: '+447700900123', startedAt: Date.now() }), /Caller ID: \+447700900123\.\]$/);
+    assert.match(callStartMessage({ from: null, startedAt: Date.now() }), /Caller ID: unknown\.\]$/);
+    const bye = (reply, action = 'hangup') => voiceTurn({ db: fakeDb(), call: callRow(), speech: 'thanks, bye', run: async () => ({ messages: [], reply, action }) });
+    const a = await bye('Thanks, Sam.');
+    assert.deepEqual([a.reply, a.rest], ['Thanks, Sam. Goodbye!', 'Thanks, Sam. Goodbye!']);
+    assert.equal((await bye('Thanks for calling. Bye!')).reply, 'Thanks for calling. Bye!');
+    assert.equal((await bye('Have a good day. Goodbye.')).reply, 'Have a good day. Goodbye.');
+    assert.equal((await bye('Thanks, Sam.', 'continue')).reply, 'Thanks, Sam.');
+    const streamed = await voiceTurn({ db: fakeDb(), call: callRow(), speech: 'bye', onText: () => {}, run: async ({ onText }) => (onText('Thanks, Sam.'), { messages: [], reply: 'Thanks, Sam.', action: 'hangup' }) });
+    assert.equal(streamed.rest, 'Goodbye!', 'only the added goodbye is still to be spoken');
+});
