@@ -9,6 +9,7 @@ import { csvToContacts } from 'lib/csv';
 import { calendarConfigured, createCalendar } from 'lib/gcal';
 import { toE164, toUsE164, usPhoneField, isOwnNumber } from 'lib/phone';
 import { isMissingTable } from 'lib/sms';
+import { isOptedOut } from 'lib/optOut';
 import { pushInboxEvent, smsInboxEvent } from 'lib/crm';
 
 const str = (fd, k) => String(fd.get(k) ?? '').trim();
@@ -159,10 +160,11 @@ export async function sendText(subaccountId, phone, prev, fd) {
     const to = toUsE164(phone || str(fd, 'phone'));
     if (!body) return { error: 'Type a message.' };
     if (body.length > 1600) return { error: 'Keep texts under 1,600 characters.' };
-    if (!to) return { error: 'Texts can only go to US phone numbers.' };
+    if (!to) return { error: 'Texts can only go to US or Canada phone numbers.' };
     if (!subaccount.twilio_number) return { error: 'Connect a phone number in Settings first.' };
     let sent;
     try {
+        if (await isOptedOut(supabase, subaccountId, to)) return { error: "This customer texted STOP, so they can't be texted until they text START." };
         sent = await twilioClient().messages.create({ from: subaccount.twilio_number, to, body });
     } catch (err) {
         return { error: err.message };

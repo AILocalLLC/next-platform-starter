@@ -4,6 +4,7 @@ import { findOrCreateContact, forwardText, isMissingTable, mediaUrls } from 'lib
 import { forbidden, readTwilioRequest } from 'lib/voice';
 import { pushInboxEvent, smsInboxEvent } from 'lib/crm';
 import { usDestination } from 'lib/phone';
+import { applyOptOutKeyword } from 'lib/optOut';
 
 const EMPTY = () => new Response('<Response/>', { headers: { 'Content-Type': 'text/xml' } });
 
@@ -20,6 +21,9 @@ export async function POST(request) {
     const body = params.Body || '';
     const media = mediaUrls(params);
     const fromOwner = phone === subaccount.notify_phone;
+
+    // STOP / START: Twilio sends the carrier reply itself (Advanced Opt-Out), so we only record it.
+    await applyOptOutKeyword(db, subaccount.id, phone, body);
 
     let contact = null;
     if (!fromOwner) {
