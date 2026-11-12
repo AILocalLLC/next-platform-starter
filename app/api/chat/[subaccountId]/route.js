@@ -4,7 +4,7 @@ import { bookingContext } from 'lib/booking';
 import { upsertLead } from 'lib/leads';
 import { createAdminClient } from 'lib/supabase/admin';
 import { finalizeCall } from 'lib/voice';
-import { LIMITS, businessChatsLastHour, createLimiter, visitorIp } from 'lib/chatLimits';
+import { LIMITS, businessChatsLastHour, createLimiter, hashIp, ipChatsLastHour, visitorIp } from 'lib/chatLimits';
 
 export const maxDuration = 26;
 
@@ -73,22 +73,27 @@ export async function POST(request, { params }) {
         chat = data;
     } else {
         if (!hit(`new:${ip}`, LIMITS.ipNewChatsPerHour, 60 * 60 * 1000)) return json({ error: BUSY }, 429);
+        const ipHash = hashIp(ip);
         try {
             if ((await businessChatsLastHour(db, sub.id)) >= LIMITS.businessNewChatsPerHour) return json({ error: BUSY }, 429);
+            if ((await ipChatsLastHour(db, ipHash)) >= LIMITS.ipNewChatsPerHourDb) return json({ error: BUSY }, 429);
         } catch (err) {
             console.error('chat limit check failed', err);
         }
-        const { data, error } = await db
+        const row = {
+            subaccount_id: sub.id,
+            channel: 'web',
+            status: 'in-progress',
+            chat_token: randomBytes(24).toString('hex'),
+            transcript: [{ role: 'ai', text: sub.chat_greeting, at: new Date().toISOString() }]
+        };
+        let { data, error } = await db
             .from('calls')
-            .insert({
-                subaccount_id: sub.id,
-                channel: 'web',
-                status: 'in-progress',
-                chat_token: randomBytes(24).toString('hex'),
-                transcript: [{ role: 'ai', text: sub.chat_greeting, at: new Date().toISOString() }]
-            })
+            .insert({ ...row, client_ip_hash: ipHash })
             .select('*')
             .single();
+        // Database without migration 0013 yet: start the chat without the IP hash.
+        if (error) ({ data, error } = await db.from('calls').insert(row).select('*').single());
         if (error) return json({ error: 'Could not start chat.' }, 500);
         chat = data;
     }
