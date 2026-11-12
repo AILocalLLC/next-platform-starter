@@ -1,7 +1,7 @@
 import twilio from 'twilio';
 import { createAdminClient } from 'lib/supabase/admin';
 import { automationText, keyMatches } from 'lib/crm';
-import { toE164, usDestination } from 'lib/phone';
+import { fromIsBusiness, toE164, usDestination } from 'lib/phone';
 import { isOptedOut } from 'lib/optOut';
 
 // The CRM's automations call this to send one text from the business's number.
@@ -35,6 +35,8 @@ export async function POST(request) {
         if (from) ({ data: subaccount } = await db.from('subaccounts').select('id, twilio_number, notify_phone').eq('twilio_number', from).maybeSingle());
     }
     if (!subaccount) return Response.json({ status: 'no-business' }, { status: 404 });
+    // A from number must be this business's own texting number.
+    if (!fromIsBusiness(subaccount, msg.from)) return Response.json({ status: 'from-not-allowed' }, { status: 403 });
     if (!subaccount.twilio_number || !process.env.TWILIO_ACCOUNT_SID) return Response.json({ status: 'no-number' }, { status: 409 });
 
     // US/Canada only, owner test texts included.

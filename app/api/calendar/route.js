@@ -1,6 +1,6 @@
 import { createAdminClient } from 'lib/supabase/admin';
 import { keyMatches } from 'lib/crm';
-import { calendarConfigured, createCalendar } from 'lib/gcal';
+import { calendarAllowed, calendarConfigured, createCalendar } from 'lib/gcal';
 import { toE164 } from 'lib/phone';
 
 // The CRM's calendar uses this to put its appointments on the business's Google
@@ -30,10 +30,12 @@ export async function POST(request) {
         ({ data: subaccount } = await db.from('subaccounts').select('*').eq('crm_funnel_slug', String(msg.slug)).maybeSingle());
     }
     if (!subaccount) return Response.json({ status: 'no-business' }, { status: 404 });
-    // calendarId: a team member's own calendar (the CRM checks who may use which) instead of the business calendar.
+    // calendarId: another calendar instead of the business calendar. Only this business's own
+    // calendar or one on AGENCY_CALENDARS; every action (busy, create, update/delete by eventId) runs on it.
     if (msg.calendarId !== undefined) {
         const id = String(msg.calendarId).trim().toLowerCase();
         if (!/^[^\s@]{1,100}@[^\s@]{1,100}\.[^\s@]{2,}$/.test(id)) return Response.json({ status: 'bad-calendar' }, { status: 400 });
+        if (!calendarAllowed(subaccount, id)) return Response.json({ status: 'calendar-not-allowed' }, { status: 403 });
         subaccount = { ...subaccount, calendar_id: id };
     }
     if (!calendarConfigured(subaccount)) return Response.json({ status: 'no-calendar' }, { status: 409 });
