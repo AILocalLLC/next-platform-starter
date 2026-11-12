@@ -32,6 +32,7 @@ See `.env.example`. Required: Supabase URL/keys, `ANTHROPIC_API_KEY`, Twilio SID
 4. In Google Calendar → the calendar's **Settings and sharing** → share with the service account email, permission **Make changes to events**.
 5. In the app: subaccount → **AI receptionist → Calendar booking** → paste the calendar ID (your Gmail address for the main calendar), set days/hours/length → Save.
 The AI then offers open times, books them on the calendar, and texts the caller the booked time. Existing events block those times.
+The CRM's calendar sync (`/api/calendar`) may only use the business's own calendar ID. To let it use other calendars (e.g. a team member's own calendar), list their IDs in the Netlify env var `AGENCY_CALENDARS` (comma-separated).
 
 ## Switching from Go High Level (no downtime)
 1. Build and test everything with one test Twilio number. GHL stays live.

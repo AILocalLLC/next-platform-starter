@@ -7,8 +7,9 @@ import { requireAdmin, requireSubaccount, requireUser } from 'lib/auth';
 import { createAdminClient } from 'lib/supabase/admin';
 import { csvToContacts } from 'lib/csv';
 import { calendarConfigured, createCalendar } from 'lib/gcal';
-import { toE164, toUsE164, isOwnNumber } from 'lib/phone';
+import { toE164, toUsE164, usPhoneField, isOwnNumber } from 'lib/phone';
 import { isMissingTable } from 'lib/sms';
+import { isOptedOut } from 'lib/optOut';
 import { pushInboxEvent, smsInboxEvent } from 'lib/crm';
 
 const str = (fd, k) => String(fd.get(k) ?? '').trim();
@@ -38,11 +39,13 @@ export async function createSubaccount(prev, fd) {
     const { supabase } = await requireAdmin();
     const name = str(fd, 'name');
     if (!name) return { error: 'Name is required.' };
+    const phone = usPhoneField('business_phone', opt(fd, 'business_phone'));
+    if (phone.error) return { error: phone.error };
     const { data, error } = await supabase
         .from('subaccounts')
         .insert({
             name,
-            business_phone: toE164(opt(fd, 'business_phone')),
+            business_phone: phone.value,
             website: opt(fd, 'website'),
             timezone: str(fd, 'timezone') || 'America/Chicago',
             greeting: `Thanks for calling ${name}! How can I help you today?`
@@ -61,7 +64,10 @@ export async function updateSubaccount(id, prev, fd) {
         if (fd.has(k)) patch[k] = str(fd, k);
     }
     for (const k of ['business_phone', 'notify_phone', 'transfer_number']) {
-        if (fd.has(k)) patch[k] = toE164(opt(fd, k));
+        if (!fd.has(k)) continue;
+        const f = usPhoneField(k, opt(fd, k));
+        if (f.error) return { error: f.error };
+        patch[k] = f.value;
     }
     // Owner alerts sent to one of our own numbers would loop back into the app.
     if (patch.notify_phone && (await isOwnNumber(createAdminClient(), patch.notify_phone))) {
@@ -154,10 +160,11 @@ export async function sendText(subaccountId, phone, prev, fd) {
     const to = toUsE164(phone || str(fd, 'phone'));
     if (!body) return { error: 'Type a message.' };
     if (body.length > 1600) return { error: 'Keep texts under 1,600 characters.' };
-    if (!to) return { error: 'Texts can only go to US phone numbers.' };
+    if (!to) return { error: 'Texts can only go to US or Canada phone numbers.' };
     if (!subaccount.twilio_number) return { error: 'Connect a phone number in Settings first.' };
     let sent;
     try {
+        if (await isOptedOut(supabase, subaccountId, to)) return { error: "This customer texted STOP, so they can't be texted until they text START." };
         sent = await twilioClient().messages.create({ from: subaccount.twilio_number, to, body });
     } catch (err) {
         return { error: err.message };
