@@ -3,6 +3,7 @@ import { createAdminClient } from 'lib/supabase/admin';
 import { findOrCreateContact, forwardText, isMissingTable, mediaUrls } from 'lib/sms';
 import { forbidden, readTwilioRequest } from 'lib/voice';
 import { pushInboxEvent, smsInboxEvent } from 'lib/crm';
+import { usDestination } from 'lib/phone';
 
 const EMPTY = () => new Response('<Response/>', { headers: { 'Content-Type': 'text/xml' } });
 
@@ -46,11 +47,12 @@ export async function POST(request) {
     }
 
     // Owner's own texts to the business line are not forwarded back to them.
-    if (!fromOwner && subaccount.notify_phone && process.env.TWILIO_ACCOUNT_SID) {
+    const ownerPhone = fromOwner ? null : usDestination(subaccount.notify_phone, 'sms forward');
+    if (ownerPhone && process.env.TWILIO_ACCOUNT_SID) {
         try {
             await twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN).messages.create({
                 from: subaccount.twilio_number,
-                to: subaccount.notify_phone,
+                to: ownerPhone,
                 body: forwardText(subaccount, { name: contact?.name, phone, body, media })
             });
         } catch (err) {

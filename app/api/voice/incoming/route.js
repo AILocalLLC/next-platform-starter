@@ -2,6 +2,7 @@ import twilio from 'twilio';
 import { createAdminClient } from 'lib/supabase/admin';
 import { relayTwiml, usesRelay } from 'lib/relay';
 import { forbidden, gather, readTwilioRequest, twimlResponse, VOICE } from 'lib/voice';
+import { usDestination } from 'lib/phone';
 
 // Twilio voice webhook for every subaccount number (set automatically by "Connect number").
 export async function POST(request) {
@@ -13,7 +14,8 @@ export async function POST(request) {
     const { data: subaccount } = await db.from('subaccounts').select('*').eq('twilio_number', params.To).maybeSingle();
 
     if (!subaccount || !subaccount.receptionist_enabled) {
-        if (subaccount?.transfer_number) twiml.dial(subaccount.transfer_number);
+        const transferTo = usDestination(subaccount?.transfer_number, 'transfer');
+        if (transferTo) twiml.dial(transferTo);
         else {
             twiml.say({ voice: VOICE }, 'Sorry, no one is available to take your call. Please try again later.');
             twiml.hangup();
