@@ -1,5 +1,5 @@
 import { createAdminClient } from 'lib/supabase/admin';
-import { relaySigOk, relaySpeakable } from 'lib/relay';
+import { relaySigOk, relaySpeakable, relaySpoken } from 'lib/relay';
 import { voiceTurn } from 'lib/voiceTurn';
 
 export const maxDuration = 26;
@@ -31,7 +31,7 @@ export async function POST(request) {
     };
     if (body.stream !== true) {
         const { reply, action } = await voiceTurn(args);
-        return Response.json({ reply: relaySpeakable(reply), action });
+        return Response.json({ reply: relaySpeakable(reply), rest: relaySpoken(reply), action });
     }
     // Streamed: one JSON line per finished sentence ({ text }), then { done, rest, reply, action }.
     const enc = new TextEncoder();
@@ -39,8 +39,8 @@ export async function POST(request) {
         async start(controller) {
             const send = (obj) => controller.enqueue(enc.encode(`${JSON.stringify(obj)}\n`));
             try {
-                const { reply, rest, action } = await voiceTurn({ ...args, onText: (sentence) => send({ text: relaySpeakable(sentence) }) });
-                send({ done: true, rest: relaySpeakable(rest), reply: relaySpeakable(reply), action });
+                const { reply, rest, action } = await voiceTurn({ ...args, onText: (sentence) => send({ text: relaySpoken(sentence) }) });
+                send({ done: true, rest: relaySpoken(rest), reply: relaySpeakable(reply), action });
             } catch (err) {
                 console.error('relay-turn stream failed', err);
                 send({ done: true, error: true });

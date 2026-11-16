@@ -16,3 +16,14 @@ test('caller IDs and formatted numbers are spoken digit by digit; prices are not
     assert.equal(speakable('12000 square feet'), '12000 square feet');
     assert.equal(speakable('Massillon, OH 44646-1234'), 'Massillon, OH 4 4 6 4 6, 1 2 3 4');
 });
+
+test('Ari speaks 15% faster: SSML for ConversationRelay, prosody inside <Say>', async () => {
+    const { SPEECH_RATE, atSpeechRate, sayAtRate } = await import('../lib/speech.js');
+    const { default: twilio } = await import('twilio');
+    assert.equal(SPEECH_RATE, '115%');
+    assert.equal(atSpeechRate('Roofing & Siding <ok>'), '<prosody rate="115%">Roofing &amp; Siding &lt;ok&gt;</prosody>');
+    assert.equal(atSpeechRate('  '), '');
+    const t = new twilio.twiml.VoiceResponse();
+    sayAtRate(t, 'Google.en-US-Chirp3-HD-Leda', 'Roofing & Siding');
+    assert.match(t.toString(), /<Say voice="Google.en-US-Chirp3-HD-Leda"><prosody rate="115%">Roofing &amp; Siding<\/prosody><\/Say>/);
+});
