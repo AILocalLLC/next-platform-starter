@@ -3,6 +3,7 @@ import { createAdminClient } from 'lib/supabase/admin';
 import { relayTwiml, usesRelay } from 'lib/relay';
 import { forbidden, gather, readTwilioRequest, twimlResponse, VOICE } from 'lib/voice';
 import { usDestination } from 'lib/phone';
+import { sayAtRate } from 'lib/speech';
 
 // Twilio voice webhook for every subaccount number (set automatically by "Connect number").
 export async function POST(request) {
@@ -17,7 +18,7 @@ export async function POST(request) {
         const transferTo = usDestination(subaccount?.transfer_number, 'transfer');
         if (transferTo) twiml.dial(transferTo);
         else {
-            twiml.say({ voice: VOICE }, 'Sorry, no one is available to take your call. Please try again later.');
+            sayAtRate(twiml, VOICE, 'Sorry, no one is available to take your call. Please try again later.');
             twiml.hangup();
         }
         return twimlResponse(twiml);
@@ -39,7 +40,7 @@ export async function POST(request) {
         .single();
     if (error) {
         console.error('call insert failed', error);
-        twiml.say({ voice: VOICE }, 'Sorry, we are having trouble right now. Please call back shortly.');
+        sayAtRate(twiml, VOICE, 'Sorry, we are having trouble right now. Please call back shortly.');
         twiml.hangup();
         return twimlResponse(twiml);
     }

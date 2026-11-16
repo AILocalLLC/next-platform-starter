@@ -2,6 +2,7 @@ import twilio from 'twilio';
 import { createAdminClient } from 'lib/supabase/admin';
 import { forbidden, gather, readTwilioRequest, twimlForAction, twimlResponse, VOICE } from 'lib/voice';
 import { voiceTurn } from 'lib/voiceTurn';
+import { sayAtRate } from 'lib/speech';
 
 export const maxDuration = 26;
 
@@ -29,7 +30,7 @@ export async function POST(request) {
     if (wasSilent && action === 'continue') {
         gather(twiml, call.id, reply, silent);
     } else if (wasSilent) {
-        twiml.say({ voice: VOICE }, reply);
+        sayAtRate(twiml, VOICE, reply);
         twiml.hangup();
     } else {
         twimlForAction(twiml, call, reply, action);
