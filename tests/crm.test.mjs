@@ -57,6 +57,8 @@ test('inbox events carry the business and the customer', () => {
     assert.equal(call.phone, '+13305550102');
     assert.equal(call.externalId, 'call:c1');
     assert.match(call.body, /^Call answered by the AI receptionist \(2 min\)\. Wants gutters\.$/);
+    assert.equal(call.newContact, false, 'no lead given: never a new CRM contact');
+    assert.equal(callInboxEvent(sub, { id: 'c4', channel: 'phone', from_number: '+13305550103', lead_captured: true }, { name: 'Jeff' }, 'Gutter guards.').newContact, true);
     const chat = callInboxEvent(sub, { id: 'c2', channel: 'web' }, { name: 'Ann', email: 'a@b.co' }, 'Asked about pricing.');
     assert.equal(chat.type, 'chat');
     assert.equal(chat.phone, undefined);
