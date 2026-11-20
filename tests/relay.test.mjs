@@ -36,6 +36,7 @@ test('TwiML: same voice as <Say>, greeting, signed bridge URL, hand-off to relay
     assert.doesNotMatch(xml, /ignorebackchannel|backgroundnoisereduction|speechtimeout/, 'attributes Twilio rejects');
     assert.match(xml, new RegExp(`url="wss://api-596595914790\\.us-central1\\.run\\.app/api/v1/voice-relay\\?call=call-1&amp;sig=${relaySig('call-1')}"`));
     assert.match(xml, /welcomeGreeting="&lt;prosody rate=&quot;115%&quot;>Hi, AI Local here, call 3 3 0, 5 5 5, 1 2 1 2\.&lt;\/prosody>"/, 'phone numbers read digit by digit, at the speaking rate');
+    assert.match(xml, /<Parameter name="greeting" value="&lt;prosody rate=&quot;115%&quot;>Hi, AI Local here/, 'greeting passed to the bridge for forwarded calls');
 });
 
 function fakeDb() {
